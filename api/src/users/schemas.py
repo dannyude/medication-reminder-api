@@ -20,8 +20,9 @@ class UserCreate(UserBase):
             raise ValueError('Passwords do not match')
         return self
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: UUID  # The ID is here, in the response model
+    first_name: str
 
     class Config:
         from_attributes = True 

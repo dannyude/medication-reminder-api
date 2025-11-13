@@ -31,16 +31,12 @@ async def create_db_and_tables() -> None:
         await conn.run_sync(Base.metadata.create_all)
 # Async dependency to get a session
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """
-    FastAPI dependency to get an async database session.
-    Yields a session, rolls back on SQLAlchemy errors, and always closes the session.
-    """
-    session = async_session()
-    
-    try:
-        yield session
-    except SQLAlchemyError:
-        await session.rollback()
-        raise
-    finally:
-        await session.close()
+    async with async_session() as session:
+        try:
+            yield session
+            await session.commit()
+        except SQLAlchemyError:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
