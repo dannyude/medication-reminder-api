@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.core.database import create_db_and_tables
+from api.src.auth.database import create_db_and_tables
 from api.src.users.routes import router as users_router
 
 # Import from your other app files

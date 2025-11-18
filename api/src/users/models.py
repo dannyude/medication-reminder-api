@@ -4,7 +4,7 @@ from sqlalchemy import String, Text
 from sqlalchemy.dialects.postgresql import UUID as pgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from api.core.database import Base
+from api.src.auth.database import Base
 
 class User(Base):
     """
