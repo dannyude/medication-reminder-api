@@ -10,3 +10,6 @@ __pycache__
 
 # --- rough sheet ---
 rough_sheet.py
+
+.vscode
+Readme.md
