@@ -5,5 +5,8 @@
 venv/
 venv_/
 # --- Python Cache ---
-__pycache__/
+__pycache__
 *.pyc
+
+# --- rough sheet ---
+rough_sheet.py

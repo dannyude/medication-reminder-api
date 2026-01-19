@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from api.src.auth.database import create_db_and_tables
-from api.src.users.routes import router as users_router
+from api.src.users import routes as UserRouters
+from api.src.auth import routes as AuthRouters
 
 # Import from your other app files
 
@@ -16,6 +17,7 @@ app = FastAPI(
 async def on_startup():
     await create_db_and_tables()
     print("✅ Database tables created (if not existing).")
-    
 
-app.include_router(users_router)
+
+app.include_router(UserRouters.router, tags=["Users"])
+app.include_router(AuthRouters.router, tags=["Authentication"])

@@ -17,14 +17,18 @@ class Settings(BaseSettings):
     # jwt settings
     SECRET_KEY: str
     ALGORITHM: str
+
+    # token expiration settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Config to specify the .env file location
     model_config = SettingsConfigDict(
         # Use the explicit path we just built
-        env_file=ENV_PATH,
+        env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+
     )
 
 

@@ -1,16 +1,19 @@
-from pydantic import BaseModel, EmailStr, field_validator
+import re
+from datetime import datetime
 from uuid import UUID
-from pydantic import model_validator
+
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from api.src.users.models import UserStatus
 
 
 class UserBase(BaseModel):
-    first_name: str
-    last_name: str
-    email: EmailStr
-    mobile_number: str
+    first_name: str = Field(..., min_length=1, max_length=50, description="First name")
+    last_name: str = Field(..., min_length=1, max_length=50, description="Last name")
+    email: EmailStr = Field(..., description="Email address")
+    mobile_number: str = Field(..., min_length=10, max_length=15, description="Mobile number")
 
-    """Validators for user with common fields and validations."""
-
+    # Validators for the fields
     @field_validator("first_name", "last_name")
     @classmethod
     def validate_name(cls, v: str) -> str:
@@ -18,21 +21,64 @@ class UserBase(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("Name fields cannot be empty")
+
+        if len(v) < 2:
+            raise ValueError('Name must be at least 2 characters')
         return v.title()
 
+    # validator for mobile number
     @field_validator("mobile_number")
     @classmethod
-    def validate_mobile_number(cls, v: str) -> str:
-        """Ensures mobile number is digits only and 10-15 characters long."""
+    def validate_mobile(cls, v: str) -> str:
+        """Validate and sanitize mobile number."""
         v = v.strip()
-        if not v.isdigit() or not (10 <= len(v) <= 15):
-            raise ValueError("Mobile number must be 10-15 digits long")
-        return v
+
+        # 1. Regex: Remove spaces, hyphens, parentheses
+        # We keep '+' because we want to know if it's international
+        cleaned = re.sub(r'[\s\-\(\)]', '', v)
+
+        # 2. Check for + prefix for the isdigit check
+        digits_only = cleaned[1:] if cleaned.startswith('+') else cleaned
+
+        # 3. Check if actual digits
+        if not digits_only.isdigit():
+            raise ValueError('Mobile number must contain only digits (and optional +)')
+
+        if len(digits_only) < 10 or len(digits_only) > 15:
+            raise ValueError('Mobile number must be between 10 and 15 digits')
+
+        return cleaned
+
 
 
 class UserCreate(UserBase):
-    password: str
-    confirm_password: str
+    password: str = Field(..., min_length=8, description="Password")
+    confirm_password: str = Field(..., min_length=8, description="Confirm Password")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+
+        v = v.strip()
+
+        # 2. Check Length
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+
+        # 3. Check Complexity
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character')
+
+        return v
 
     @model_validator(mode="after")
     def check_passwords_match(self):
@@ -42,28 +88,19 @@ class UserCreate(UserBase):
         return self
 
 
-class UserResponse(BaseModel):
-    id: UUID  # The ID is here, in the response model
+class UserResponseSchema(BaseModel):
+    id: UUID
+    email: EmailStr
     first_name: str
+    last_name: str
+    mobile_number: str | None = None  # Use | None if it can be empty
+    status: UserStatus
+    created_at: datetime
+    last_login_at: datetime | None = None
 
     class Config:
         from_attributes = True
 
-
-# 4. UserInDB (The INTERNAL model for your database)
-# This is what you'd use to create the DB object.
-# It has the ID and the *hashed* password.
-class UserInDB(UserBase):
-    id: UUID
-    hashed_password: str
-
-
-# A Token schema for returning JWT tokens
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-    expire: int
-
-
-class TokenData(BaseModel):
-    user_id: UUID | None = None
+class ResponseMessage(BaseModel):
+    user: UserResponseSchema
+    message: str

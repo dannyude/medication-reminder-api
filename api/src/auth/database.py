@@ -1,9 +1,10 @@
 from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.exc import SQLAlchemyError
 
-from .config import settings
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+from ..config import settings
 
 
 #Get the DATABASE URL
@@ -11,7 +12,7 @@ DATABASE_URL = settings.DATABASE_URL
 if not DATABASE_URL:
     raise ValueError("DB_URL not set in .env or config")
 
-# Crete the async engine   
+# Crete the async engine
 engine = create_async_engine(DATABASE_URL, echo=True)
 
 #Create the async session maker
