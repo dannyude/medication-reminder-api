@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, BackgroundTasks
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.src.auth.database import get_session
 from api.src.auth.dependencies import get_current_active_user
+from api.src.auth.redis_rate_limiter import RedisRateLimiter
 from api.src.auth.schemas import ChangePasswordSchema, LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, UserResponseSchema
 from api.src.auth.security import get_password_hash, verify_password
 from api.src.auth.tokens import (
@@ -17,9 +18,11 @@ from api.src.auth.tokens import (
     hash_token,
     store_refresh_token,
     create_password_reset_token,
+    verify_password_reset_token,
 )
 from api.src.config import settings
 from api.src.users.models import RefreshToken, User, UserStatus
+from api.src.services.email_service import EmailService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
@@ -74,6 +77,11 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is suspended. Contact support.",
         )
+
+    user.last_login_at = datetime.now(timezone.utc)
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
 
     # if user is active, generate tokens
     access_token = create_access_token(
@@ -454,39 +462,79 @@ async def logout_all(
 # Forgot password endpoint
 @router.post("/forgot-password")
 async def forgot_password(
-    request: ForgotPasswordSchema,
+    request: Request,
+    body: ForgotPasswordSchema,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(User).where(User.email == request.email)
+    """
+    Initiates the password reset process.
+
+    Always returns a success message to prevent email enumeration.
+    If the email exists, a reset link is sent to the user's email.
+    """
+
+    email = body.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
+
+    # Check rate limits
+    await RedisRateLimiter.check_password_reset_limit(
+        email=email,
+        ip_address=client_ip,
+    )
+
+    success_message = "If the email exists, a reset link has been sent."
+
+
+    stmt = select(User).where(User.email == body.email)
     user = (await session.execute(stmt)).scalar_one_or_none()
 
     if user:
         reset_token = create_password_reset_token(
             subject=str(user.id),
+            expires_delta=timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
         )
 
-    return {
-        "detail": "If the email exists, a reset link has been sent."
-    }
+        try:
+            user_name = f"{user.first_name} {user.last_name}".strip() or "User"
 
+            # we use background tasks to send email asynchronously
+            background_tasks.add_task(
+                EmailService.send_password_reset_email,
+                email=user.email,
+                reset_token=reset_token,
+                user_name=user_name,
+            )
+        except Exception as exc:
+            logger.error("Failed to schedule password reset email for %s: %s", user.email, exc)
+    else:
+        logger.info("Password reset requested for non-existent email: %s", body.email)
+
+    # Record this attempt
+    await RedisRateLimiter.record_attempt(
+        email=email,
+        ip_address=client_ip,
+    )
+
+    return {"message": success_message}
+
+# Reset password endpoint
 @router.post("/reset-password")
 async def reset_password(
     request:ResetPasswordSchema,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ):
+    """
+    Completes password reset using the token.
+    Invalidates all previous sessions.
+    """
     try:
-        payload = jwt.decode(
-            request.reset_token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM],
-        )
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=401, detail="Invalid reset token") from exc
-
-    if payload.get("type") != "password_reset":
-        raise HTTPException(status_code=401, detail="Invalid token type")
-
-    user_id = uuid.UUID(payload.get("sub"))
+        user_id = verify_password_reset_token(request.reset_token)
+    except HTTPException as exc:
+        raise HTTPException(status_code=401,
+                            detail="Invalid or expired reset token"
+                            ) from exc
 
     # Find user
     stmt = select(User).where(User.id == user_id)
@@ -494,6 +542,13 @@ async def reset_password(
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if new passwords is the same as old password
+    if verify_password(request.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password cannot be the same as the old password.",
+        )
 
     user.hashed_password = get_password_hash(request.new_password)
     user.password_changed_at = datetime.now(timezone.utc)
@@ -507,5 +562,12 @@ async def reset_password(
     )
     await session.execute(stmt)
     await session.commit()
+
+    user_name = f"{user.first_name} {user.last_name}"
+    background_tasks.add_task(
+        EmailService.send_password_changed_notification,
+        email=user.email,
+        user_name=user_name,
+    )
 
     return {"message": "Password reset successful"}

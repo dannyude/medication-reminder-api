@@ -2,19 +2,9 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, ValidationInfo
 
 from api.src.users.models import UserStatus
-
-
-# class Token(BaseModel):
-#     access_token: str
-#     token_type: str
-#     expire: int
-
-
-# class TokenData(BaseModel):
-#     user_id: UUID | None = None
 
 
 class LoginSchema(BaseModel):
@@ -36,7 +26,6 @@ class UserResponseSchema(BaseModel):
         from_attributes = True
 
 
-
 class ChangePasswordSchema(BaseModel):
     old_password: str = Field(..., min_length=1)
     new_password: str = Field(..., min_length=6)
@@ -45,24 +34,35 @@ class ChangePasswordSchema(BaseModel):
 # Forgot password schema
 class ForgotPasswordSchema(BaseModel):
     email: EmailStr
-    delivery_method: str = Field(default="sms", pattern="^(sms|email)$")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "email": "user@example.com",
-                "delivery_method": "sms"
             }
         }
+
 # Reset password schema
 class ResetPasswordSchema(BaseModel):
-    reset_token: str
-    new_password: str = Field(..., min_length=8)
+    reset_token: str = Field(
+        description="Password reset token sent via email",
+        examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."]
+    )
+    new_password: str = Field(
+        min_length=8,
+        description="New account password (minimum 8 characters)",
+        examples=["StrongP@ssw0rd"]
+    )
+    confirm_new_password: str = Field(
+        min_length=8,
+        description="Must match the new password",
+        examples=["StrongP@ssw0rd"]
+    )
 
     @field_validator('new_password')
     @classmethod
     def validate_password(cls, v):
-        """Validate password strength."""
+        # (This part is perfectly fine!)
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')
         if not re.search(r'[A-Z]', v):
@@ -75,24 +75,20 @@ class ResetPasswordSchema(BaseModel):
             raise ValueError('Password must contain at least one special character')
         return v
 
-    class Config:
-        json_schema_extra = {
+    @field_validator('confirm_new_password')
+    @classmethod
+    def passwords_match(cls, v: str, info: ValidationInfo):
+        """Ensure new_password and confirm_new_password match."""
+        if 'new_password' in info.data and v != info.data['new_password']:
+            raise ValueError('New password and confirmation do not match')
+        return v
+
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "reset_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "new_password": "NewPassword123!"
+                "new_password": "StrongP@ssw0rd",
+                "confirm_new_password": "StrongP@ssw0rd"
             }
         }
-
-
-class VerifyOTPSchema(BaseModel):
-    email: EmailStr
-    otp: str = Field(..., min_length=6, max_length=6, pattern="^\d{6}$")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "user@example.com",
-                "otp": "123456"
-            }
-        }
-
+    }
