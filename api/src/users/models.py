@@ -12,7 +12,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as pgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from api.src.auth.database import Base
+from api.src.database import Base
 
 
 class UserStatus(enum.Enum):
@@ -77,6 +77,12 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+
+    medications = relationship("Medication", back_populates="user", cascade="all, delete-orphan")
+    reminders = relationship("Reminder", back_populates="user", cascade="all, delete-orphan")
+    medication_logs = relationship("MedicationLog", back_populates="user", cascade="all, delete-orphan")
+
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

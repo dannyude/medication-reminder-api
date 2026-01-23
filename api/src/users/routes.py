@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.src.auth.database import get_session
+from api.src.database import get_session
 from api.src.users.crud import register_user
 from api.src.users.schemas import UserCreate, ResponseMessage
 

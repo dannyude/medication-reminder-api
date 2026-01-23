@@ -33,14 +33,14 @@ class UserBase(BaseModel):
         """Validate and sanitize mobile number."""
         v = v.strip()
 
-        # 1. Regex: Remove spaces, hyphens, parentheses
+        # Regex: Remove spaces, hyphens, parentheses
         # We keep '+' because we want to know if it's international
         cleaned = re.sub(r'[\s\-\(\)]', '', v)
 
-        # 2. Check for + prefix for the isdigit check
+        # Check for + prefix for the isdigit check
         digits_only = cleaned[1:] if cleaned.startswith('+') else cleaned
 
-        # 3. Check if actual digits
+        # Check if actual digits
         if not digits_only.isdigit():
             raise ValueError('Mobile number must contain only digits (and optional +)')
 

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from api.src.auth.security import SECERET_KEY, ALGORITHM, oauth2_scheme
-from api.src.auth.database import get_session
+from api.src.database import get_session
 
 from api.src.users.models import User, UserStatus
 

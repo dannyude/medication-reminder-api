@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.src.auth.database import create_db_and_tables
+from api.src.database import create_db_and_tables
 from api.src.auth import routers as AuthRouters
 
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, Ba
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.src.auth.database import get_session
+from api.src.database import get_session
 from api.src.auth.dependencies import get_current_active_user
 from api.src.auth.redis_rate_limiter import RedisRateLimiter
 from api.src.auth.schemas import ChangePasswordSchema, LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, UserResponseSchema
@@ -294,7 +294,7 @@ async def get_current_user(
 
 
 # Change password endpoint
-@router.post("/change-password")
+@router.post("/change_password")
 async def change_password(
     password_data: ChangePasswordSchema,
     current_user: User = Depends(get_current_active_user),
@@ -414,7 +414,7 @@ async def logout(
 
 
 # Logout from all sessions
-@router.post("/logout-all")
+@router.post("/logout_all")
 async def logout_all(
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_session),
@@ -460,7 +460,7 @@ async def logout_all(
     }
 
 # Forgot password endpoint
-@router.post("/forgot-password")
+@router.post("/forgot_password")
 async def forgot_password(
     request: Request,
     body: ForgotPasswordSchema,
@@ -519,7 +519,7 @@ async def forgot_password(
     return {"message": success_message}
 
 # Reset password endpoint
-@router.post("/reset-password")
+@router.post("/reset_password")
 async def reset_password(
     request:ResetPasswordSchema,
     background_tasks: BackgroundTasks,

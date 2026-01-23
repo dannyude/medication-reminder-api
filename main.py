@@ -2,10 +2,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from api.src.auth.database import create_db_and_tables
+from api.src.database import create_db_and_tables
 from api.src.auth.redis_rate_limiter import init_redis, close_redis
 from api.src.users import routes as UserRouters
 from api.src.auth import routes as AuthRouters
+from api.src.medications import routes as MedicationRouters
 
 # The life span of the application
 @asynccontextmanager
@@ -39,3 +40,4 @@ app = FastAPI(
 
 app.include_router(UserRouters.router, tags=["Users"])
 app.include_router(AuthRouters.router, tags=["Authentication"])
+app.include_router(MedicationRouters.router, tags=["Medications"])
