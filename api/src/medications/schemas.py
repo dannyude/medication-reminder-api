@@ -1,8 +1,8 @@
 from datetime import date, datetime, time
 from uuid import UUID
-import zoneinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-from pydantic import BaseModel, Field, field_validator, model_validator, computed_field
+from pydantic import BaseModel, field_validator, model_validator, computed_field
+
 from api.src.medications.models import FrequencyType, ReminderStatus
 
 
@@ -71,7 +71,7 @@ class MedicationCreate(MedicationBase):
 
         tz = ZoneInfo(self.timezone)
 
-        """Combine start_date and start_time into a UTC datetime."""
+        # Combine start_date and start_time into a UTC datetime.
         local_dt = datetime.combine(self.start_date, self.start_time)
         # Here you would convert local_dt to UTC based on self.timezone
         # For simplicity, assuming timezone is UTC
@@ -85,7 +85,7 @@ class MedicationCreate(MedicationBase):
         t = self.end_time or time(23, 59, 59)
 
         tz = ZoneInfo(self.timezone)
-        """Combine end_date and end_time into a UTC datetime."""
+        # Combine end_date and end_time into a UTC datetime
         local_dt = datetime.combine(self.end_date, t)
         return local_dt.replace(tzinfo=tz).astimezone(ZoneInfo("UTC"))
 

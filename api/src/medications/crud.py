@@ -1,12 +1,12 @@
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
-import uuid
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_
-from datetime import  datetime, timezone
-from fastapi import HTTPException, status
 
-from api.src.medications.models import Medication, Reminder, MedicationLog, ReminderStatus
+from fastapi import HTTPException, status
+from sqlalchemy import and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.src.medications.models import Medication, MedicationLog, Reminder, ReminderStatus
 from api.src.medications.schemas import MedicationCreate, MedicationUpdate
 
 logger = logging.getLogger(__name__)
@@ -29,14 +29,13 @@ async def create_medication(
     data.pop("start_datetime_utc", None)
     data.pop("end_datetime_utc", None)
 
-    # 👇 CORRECT MAPPING: Use the DB Column Names ('start_date', 'end_date')
+
     data["start_date"] = medication_in.start_datetime_utc
 
     if medication_in.end_datetime_utc:
         data["end_date"] = medication_in.end_datetime_utc
 
-    # Create medication instance
-    # data now has keys: 'name', 'timezone', 'start_date', etc.
+
     medication = Medication(
         user_id=user_id,
         **data
