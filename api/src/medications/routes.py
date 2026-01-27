@@ -5,12 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.src.database import get_session
 from api.src.auth.dependencies import get_current_active_user
+from api.src.reminders.services import ReminderGenerator
 from api.src.users.models import User
 from api.src.medications import crud
 from api.src.medications.schemas import (
     MedicationCreate,
     MedicationUpdate,
-    MedicationResponse
+    MedicationResponse,
+    MedicationStockUpdate,
 )
 
 router = APIRouter(prefix="/medications", tags=["Medications"])
@@ -29,6 +31,17 @@ async def create_medication(
         current_user.id,
         medication_in
     )
+
+    new_reminders = await ReminderGenerator.generate_reminders_for_medication(
+        session = session,
+        medication = medication
+    )
+
+    if new_reminders:
+        session.add_all(new_reminders)
+        await session.commit()
+
+
     return medication
 
 
@@ -78,6 +91,39 @@ async def update_medication(
     )
     return medication
 
+@router.get("/low_stock", response_model=list[MedicationResponse])
+async def get_low_stock_medications(
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Get medications that are low in stock for current user."""
+    medications = await crud.get_low_stock_medications(
+        session,
+        current_user.id
+    )
+    return medications
+
+@router.patch("/{medication_id}/stock", response_model=MedicationResponse)
+async def update_stock_endpoint(
+    medication_id: UUID,
+    stock_update: MedicationStockUpdate,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Update medication stock.
+    - **quantity**: Positive to add stock, negative to reduce
+    - **note**: Optional note about the change
+    """
+
+    medication = await crud.update_medication_stock(
+        session,
+        medication_id,
+        current_user.id,
+        stock_update
+    )
+
+    return medication
 
 @router.delete("/delete/{medication_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_medication(

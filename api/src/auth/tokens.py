@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.src.auth.security import SECERET_KEY, ALGORITHM
-from api.src.users.models import RefreshToken
+from api.src.auth.models import RefreshToken
 
 logger = logging.getLogger(__name__)
 

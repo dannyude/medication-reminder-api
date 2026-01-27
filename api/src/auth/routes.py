@@ -21,7 +21,8 @@ from api.src.auth.tokens import (
     verify_password_reset_token,
 )
 from api.src.config import settings
-from api.src.users.models import RefreshToken, User, UserStatus
+from api.src.users.models import User, UserStatus
+from api.src.auth.models import RefreshToken
 from api.src.services.email_service import EmailService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])

@@ -17,7 +17,7 @@ class UserResponseSchema(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
-    mobile_number: str | None = None  # Use | None if it can be empty
+    mobile_number: str | None = None
     status: UserStatus
     created_at: datetime
     last_login_at: datetime | None = None

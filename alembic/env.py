@@ -13,7 +13,12 @@ from api.src.database import Base
 # 👇 CRITICAL: Import all your models here so Alembic can "see" them
 
 from api.src.users.models import User
+
 from api.src.medications.models import Medication
+
+from api.src.logs.models import MedicationLog
+
+from api.src.reminders.models import Reminder
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

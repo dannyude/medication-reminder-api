@@ -17,10 +17,10 @@ engine = create_async_engine(DATABASE_URL, echo=True)
 
 # Create the async session maker
 async_session: sessionmaker[AsyncSession] = sessionmaker(
-    engine,
+    bind=engine,
     class_=AsyncSession,
     expire_on_commit=False
-    )
+    ) # type: ignore
 
 # Create the base class for all models
 Base = declarative_base()
