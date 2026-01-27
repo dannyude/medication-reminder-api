@@ -77,7 +77,7 @@
     &nbsp; &nbsp;
     <img src="images/screenshot_05.png" alt="Feature Screenshot" width="45%">
     &nbsp; &nbsp;
-    <img src="images/Screenshot_06.png" alt="Feature Screenshot" width="45%">
+    <img src="images/screenshot_06.png" alt="Feature Screenshot" width="45%">
   </p>
 </div>
 
@@ -259,6 +259,7 @@ This architecture mirrors **enterprise SaaS authentication systems**.
 [Bootstrap-url]: https://getbootstrap.com
 [JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
 [JQuery-url]: https://jquery.com 
+
 
 
 
