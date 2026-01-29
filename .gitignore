@@ -16,3 +16,7 @@ Readme.md
 
 # --- Service Account Key ---
 serviceAccountKey.json
+
+# Ignore Postman configs and collections
+.postman/
+postman/
