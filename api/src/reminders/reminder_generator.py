@@ -25,16 +25,13 @@ class ReminderGenerator:
             return []
 
         # 1. Define the Time Window
-        now_utc = datetime.now(dt_timezone.utc)
+        now_utc = datetime.now(dt_timezone.utc).replace(microsecond=0) # <--- Strip microseconds for DB matching
         end_generation = now_utc + timedelta(days=days_ahead)
 
-        # Cap generation at the medication's end date (if it exists)
-        # Note: Ensure to compare datetime vs datetime
         if medication.end_datetime and medication.end_datetime < end_generation:
             end_generation = medication.end_datetime
 
         # 2. OPTIMIZATION: Fetch ALL existing reminders in this window ONCE
-        # This prevents running thousands of "Select" queries in the loop
         existing_stmt = select(Reminder.scheduled_time).where(
             and_(
                 Reminder.medication_id == medication.id,
@@ -45,7 +42,10 @@ class ReminderGenerator:
         existing_result = await session.execute(existing_stmt)
 
         # Create a "Lookup Set" for instant checking
-        existing_reminders = {dt for dt in existing_result.scalars().all()}
+        # CRITICAL: Normalize DB timestamps to match Python generation precision
+        existing_reminders = {
+            dt.replace(microsecond=0) for dt in existing_result.scalars().all()
+        }
 
         reminders: list[Reminder] = []
 
@@ -53,18 +53,33 @@ class ReminderGenerator:
         if medication.frequency_type in {
             FrequencyType.ONCE_DAILY, FrequencyType.TWICE_DAILY,
             FrequencyType.THREE_TIMES_DAILY, FrequencyType.FOUR_TIMES_DAILY,
+            FrequencyType.CUSTOM
         }:
-            times_map = {
-                FrequencyType.ONCE_DAILY: [time(8, 0)],
-                FrequencyType.TWICE_DAILY: [time(8, 0), time(20, 0)],
-                FrequencyType.THREE_TIMES_DAILY: [time(8, 0), time(14, 0), time(20, 0)],
-                FrequencyType.FOUR_TIMES_DAILY: [time(8, 0), time(12, 0), time(16, 0), time(20, 0)],
-            }
-            # Use default if type not found (fallback)
-            schedule_times = times_map.get(medication.frequency_type, [time(8, 0)])
+            scheduled_times: list[time] = []
+
+            # Logic: Use Custom Times if they exist, otherwise use Defaults
+            if medication.reminder_times:
+                for t in medication.reminder_times:
+                    # Defensive Check: Handle String vs Time object
+                    if isinstance(t, str):
+                        try:
+                            scheduled_times.append(time.fromisoformat(t))
+                        except ValueError:
+                            logger.warning(f"⚠️ Invalid time format in reminder_times: {t} for medication {medication.id}")
+                            continue
+                    elif isinstance(t, time):
+                        scheduled_times.append(t)
+            else:
+                times_map = {
+                    FrequencyType.ONCE_DAILY: [time(8, 0)],
+                    FrequencyType.TWICE_DAILY: [time(8, 0), time(20, 0)],
+                    FrequencyType.THREE_TIMES_DAILY: [time(8, 0), time(14, 0), time(20, 0)],
+                    FrequencyType.FOUR_TIMES_DAILY: [time(6, 0), time(12, 0), time(18, 0), time(22, 0)],
+                }
+                scheduled_times = times_map.get(medication.frequency_type, [time(8, 0)])
 
             reminders = ReminderGenerator._generate_daily_reminders(
-                medication, now_utc, end_generation, schedule_times, existing_reminders
+                medication, now_utc, end_generation, scheduled_times, existing_reminders
             )
 
         elif medication.frequency_type == FrequencyType.EVERY_X_HOURS:
@@ -83,34 +98,28 @@ class ReminderGenerator:
         dose_times: list[time],
         existing_reminders: set[datetime]
     ) -> list[Reminder]:
-        """
-        Generates reminders based on wall-clock time (e.g. always 8 AM local).
-        """
+
         reminders: list[Reminder] = []
 
-        # Guard against invalid timezones
         try:
             tz = ZoneInfo(medication.timezone)
         except Exception:
+            logger.warning(f"⚠️ Invalid timezone '{medication.timezone}' for medication {medication.id}, defaulting to UTC.")
             tz = dt_timezone.utc
 
-        # Convert start/end UTC window to Local Dates
         current_date = start_utc.astimezone(tz).date()
         end_date = end_utc.astimezone(tz).date()
 
         while current_date <= end_date:
             for dose_time in dose_times:
-                # 1. Construct Local Time (e.g., "Jan 25th at 8:00 PM Lagos Time")
                 local_dt = datetime.combine(current_date, dose_time, tzinfo=tz)
 
-                # 2. Convert to UTC for storage
-                scheduled_utc = local_dt.astimezone(dt_timezone.utc)
+                # Strip microseconds to ensure it matches the 'existing_reminders' set
+                scheduled_utc = local_dt.astimezone(dt_timezone.utc).replace(microsecond=0)
 
-                # 3. Validation Checks
                 if scheduled_utc < start_utc: continue
                 if scheduled_utc > end_utc: continue
 
-                # 4. FAST CHECK: Check against the Set (O(1) complexity)
                 if scheduled_utc in existing_reminders:
                     continue
 
@@ -142,18 +151,13 @@ class ReminderGenerator:
         reminders: list[Reminder] = []
         interval = timedelta(hours=medication.frequency_value)
 
-        # Use medication start datetime
-        current = medication.start_datetime
+        # Ensure we work with clean timestamps
+        current = medication.start_datetime.replace(microsecond=0)
 
-        # "Fast Forward" logic:
-        # Jump from the medication start date to the current window
-        # This keeps the grid aligned (e.g., 8am, 4pm, 12am) even months later
         if current < start_utc:
             delta = start_utc - current
             steps = int(delta.total_seconds() // interval.total_seconds())
             current += interval * steps
-
-            # Ensure we are actually *inside* or *after* the start window
             if current < start_utc:
                 current += interval
 
@@ -167,10 +171,10 @@ class ReminderGenerator:
                         status=ReminderStatus.PENDING
                     )
                 )
-
             current += interval
 
         return reminders
+
 
     # BATCH GENERATION
     @staticmethod
@@ -178,22 +182,30 @@ class ReminderGenerator:
         session: AsyncSession,
         days_ahead: int = 7
     ) -> int:
+        """
+        Uses DB streaming to handle large datasets without OOM errors.
+        """
+        # yield_per(100) tells Postgres to send rows in chunks, not all at once
+        stmt = select(Medication).where(Medication.is_active.is_(True)).execution_options(yield_per=100)
 
-        # Select active meds
-        stmt = select(Medication).where(Medication.is_active.is_(True))
-        result = await session.execute(stmt)
-        medications = result.scalars().all()
+        # We must use 'stream' for proper chunking
+        result = await session.stream(stmt)
 
         total_created = 0
 
-        for med in medications:
+        # Async iteration over the stream
+        async for med_row in result:
+            med = med_row[0]
+
             new_reminders = await ReminderGenerator.generate_reminders_for_medication(
                 session, med, days_ahead
             )
+
             if new_reminders:
                 session.add_all(new_reminders)
                 total_created += len(new_reminders)
 
+        # Commit once at the end (or periodically inside the loop if massive)
         if total_created > 0:
             await session.commit()
             logger.info(f"✅ Created {total_created} new reminders.")

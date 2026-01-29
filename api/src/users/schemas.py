@@ -104,3 +104,7 @@ class UserResponseSchema(BaseModel):
 class ResponseMessage(BaseModel):
     user: UserResponseSchema
     message: str
+
+
+class TokenSchema(BaseModel):
+    fcm_token: str = Field(..., description="Firebase Cloud Messaging token")

@@ -127,20 +127,26 @@ class MedicationCreate(MedicationBase):
                 {
                 "name": "Amoxicillin",
                 "dosage": "500mg",
+                "administration_route": "Oral",
                 "form": "Capsule",
                 "color": "Red and White",
-                "administration_route": "Oral",
                 "instructions": "Take with food",
 
                 "frequency_type": "twice_daily",
+                "frequency_value": None,
+
+                "current_stock": 20,
+                "low_stock_threshold": 5,
+
                 "timezone": "Africa/Lagos",
                 "start_date": "2026-01-23",
                 "start_time": "08:00:00",
                 "end_date": "2026-02-02",
                 "end_time": "20:00:00",
 
-                "current_stock": 20,
-                "low_stock_threshold": 5
+                "reminder_times": ["08:00:00", "20:00:00"],
+
+
                 }
             ]
         }

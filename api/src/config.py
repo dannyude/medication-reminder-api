@@ -47,6 +47,12 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379"
 
+    # Africa's Talking configuration
+    AT_API_KEY: str
+    AT_USERNAME: str
+    AT_SENDER_ID: str
+    AT_ENV: str
+
     # Config to specify the .env file location
     model_config = SettingsConfigDict(
         # Use the explicit path we just built

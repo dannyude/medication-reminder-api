@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.src.database import get_session
 from api.src.auth.dependencies import get_current_active_user
-from api.src.reminders.services import ReminderGenerator
+from api.src.reminders.reminder_generator import ReminderGenerator
 from api.src.users.models import User
 from api.src.medications import crud
 from api.src.medications.schemas import (

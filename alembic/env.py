@@ -16,6 +16,8 @@ from api.src.users.models import User
 
 from api.src.medications.models import Medication
 
+from api.src.auth.models import RefreshToken
+
 from api.src.logs.models import MedicationLog
 
 from api.src.reminders.models import Reminder

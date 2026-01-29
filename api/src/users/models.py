@@ -66,12 +66,16 @@ class User(Base):
 
     session_version: Mapped[int] = mapped_column(default=0, nullable=False)
 
+    fcm_token: Mapped[str | None] = mapped_column(String, nullable=True)
+
     refresh_tokens = relationship(
         "RefreshToken",
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+
 
 
     medications = relationship("Medication", back_populates="user", cascade="all, delete-orphan")

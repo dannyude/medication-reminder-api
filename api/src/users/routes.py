@@ -2,8 +2,11 @@ import logging
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.src.auth.dependencies import get_current_active_user
 from api.src.database import get_session
+from api.src.users.schemas import TokenSchema
 from api.src.users.crud import register_user
+from api.src.users.models import User
 from api.src.users.schemas import UserCreate, ResponseMessage
 
 router = APIRouter(prefix="/user", tags=["Users"])
@@ -35,3 +38,16 @@ async def register(
         "message": "User registered successfully",
         "user": new_user
     }
+
+
+@router.post("/fcm-token")
+async def update_fcm_token(
+    token_data: TokenSchema,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """Save the user's device token for push notifications."""
+    current_user.fcm_token = token_data.fcm_token
+    session.add(current_user)
+    await session.commit()
+    return {"message": "FCM Token updated successfully"}
