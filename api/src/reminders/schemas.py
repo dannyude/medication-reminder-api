@@ -8,31 +8,35 @@ from api.src.medications.enums import ReminderStatus
 
 
 
-class MarkReminderSchema(BaseModel):
-    """Schema for marking reminder as taken/missed/skipped."""
-
+class ReminderStatusSchema(BaseModel):
     status: ReminderStatus = Field(..., description="taken, missed, skipped")
+
+class MarkAsTakenSchema(BaseModel):
+    taken_at: Optional[datetime] = Field(
+        default=None,
+        description="Timestamp when the medication was taken. Defaults to current time if not provided."
+    )
     notes: Optional[str] = Field(
         default=None,
         max_length=500,
-        examples=["Took with breakfast"]
+        examples=["Felt good after taking", "No side effects"]
     )
 
-    taken_at: Optional[datetime] = Field(
+class MarkAsMissedSchema(BaseModel):
+    notes: Optional[str] = Field(
         default=None,
-        description="When medication was taken (defaults to now)"
+        max_length=500,
+        examples=["Forgot to take it", "Was feeling unwell"]
     )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "status": "taken",
-                "notes": "Took with breakfast",
-                "taken_at": None
-            }
-        }
+class MarkAsSkippedSchema(BaseModel):
+    notes: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        examples=["Decided to skip this dose", "Doctor advised to skip"]
+    )
 
-
+# Response Schemas
 class ReminderResponse(BaseModel):
     """Schema for reminder responses."""
 
@@ -66,9 +70,7 @@ class ReminderResponse(BaseModel):
     updated_at: datetime | None = None
     model_config = ConfigDict(from_attributes=True)
 
-
-
-
+# Paginated List Response
 class ReminderListResponse(BaseModel):
     """Paginated list of reminders."""
 

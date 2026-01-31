@@ -13,7 +13,9 @@ from api.src.medications.schemas import (
     MedicationUpdate,
     MedicationResponse,
     MedicationStockUpdate,
+    MedicationPaginationResponse
 )
+from api.src.reminders.crud import generate_and_save_reminders
 
 router = APIRouter(prefix="/medications", tags=["Medications"])
 logger = logging.getLogger(__name__)
@@ -45,19 +47,25 @@ async def create_medication(
     return medication
 
 
-@router.get("/get_all", response_model=list[MedicationResponse])
+@router.get("/get_all", response_model=MedicationPaginationResponse)
 async def get_medications(
+    page: int = 1,
+    page_size: int = 20,
     active_only: bool = True,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Get all medications for current user."""
-    medications = await crud.get_user_medications(
-        session,
-        current_user.id,
-        active_only
+    """Get all medications for current user with pagination."""
+    meds, total_count = await crud.get_user_medications(
+        session, current_user.id, active_only, page, page_size
     )
-    return medications
+
+    return {
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "medications": meds
+    }
 
 
 @router.get("/get_specific/{medication_id}", response_model=MedicationResponse)
@@ -75,21 +83,54 @@ async def get_medication(
 
     return medication
 
-@router.patch("/update/{medication_id}", response_model=MedicationResponse)
+@router.patch("/{medication_id}", response_model=MedicationResponse) # 1. Removed redundant "/update"
 async def update_medication(
     medication_id: UUID,
     medication_update: MedicationUpdate,
     current_user: User = Depends(get_current_active_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Update a medication."""
-    medication = await crud.update_medication(
+    """Update a medication and regenerate schedule if needed."""
+
+    # 1. Perform the Update
+    updated_medication = await crud.update_medication(
         session,
         medication_id,
         current_user.id,
         medication_update
     )
-    return medication
+
+    # 2. Check for Schedule Changes 🕵️‍♂️
+    # We convert the update model to a dict (excluding unset/null values)
+    # to see exactly what the user sent us.
+    update_data = medication_update.model_dump(exclude_unset=True)
+
+    # Define which fields alter the schedule
+    schedule_impacting_fields = {
+        "frequency_type",
+        "frequency_value",
+        "reminder_times",  # <--- CRITICAL: Don't forget this!
+        "start_date",      # <--- Note: start_date, not start_datetime
+        "start_time",
+        "end_date",
+        "end_time",
+        "timezone"
+    }
+
+    # If any of the sent fields are in our "Impact List", regenerate.
+    schedule_changed = any(field in update_data for field in schedule_impacting_fields)
+
+    if schedule_changed:
+        # 3. Use the Smart Function (Clean + Generate + Deduplicate)
+        # We don't need to manually clear/add/commit here. The CRUD does it.
+        await generate_and_save_reminders(
+            session = session,
+            medication = updated_medication,
+            days_ahead = 30,          # Generate 30 days into the future
+            clear_future = True       # Clear future reminders before regenerating
+        )
+    return updated_medication
+
 
 @router.get("/low_stock", response_model=list[MedicationResponse])
 async def get_low_stock_medications(
@@ -125,7 +166,7 @@ async def update_stock_endpoint(
 
     return medication
 
-@router.delete("/delete/{medication_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{medication_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_medication(
     medication_id: UUID,
     current_user: User = Depends(get_current_active_user),

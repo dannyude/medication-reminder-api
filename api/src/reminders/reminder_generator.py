@@ -18,25 +18,36 @@ class ReminderGenerator:
     async def generate_reminders_for_medication(
         session: AsyncSession,
         medication: Medication,
-        days_ahead: int = 7
+        days_ahead: int = 30
     ) -> list[Reminder]:
 
         if not medication.is_active:
             return []
 
-        # 1. Define the Time Window
-        now_utc = datetime.now(dt_timezone.utc).replace(microsecond=0) # <--- Strip microseconds for DB matching
-        end_generation = now_utc + timedelta(days=days_ahead)
+        # 1. Define baseline time window
+        now_utc = datetime.now(dt_timezone.utc).replace(microsecond=0)
 
-        if medication.end_datetime and medication.end_datetime < end_generation:
-            end_generation = medication.end_datetime
+        # 🛑 Early Return for Expired Medications
+        if medication.end_datetime and medication.end_datetime <= now_utc:
+            logger.info("⏭️ Skipping %s: End date %s has passed.", medication.name, medication.end_datetime)
+            return []
 
-        # 2. OPTIMIZATION: Fetch ALL existing reminders in this window ONCE
+        # 🛑 Determine Effective Start (Don't start before the med starts!)
+        start_point = max(now_utc, medication.start_datetime).replace(microsecond=0)
+
+        # 2. Calculate the cut-off date
+        limit_date = now_utc + timedelta(days=days_ahead)
+
+        # Ensure we don't go past the medication's own end date
+        if medication.end_datetime:
+            limit_date = min(limit_date, medication.end_datetime)
+
+        # 3. OPTIMIZATION: Fetch ALL existing reminders in this window ONCE
         existing_stmt = select(Reminder.scheduled_time).where(
             and_(
                 Reminder.medication_id == medication.id,
-                Reminder.scheduled_time >= now_utc,
-                Reminder.scheduled_time <= end_generation
+                Reminder.scheduled_time >= start_point,
+                Reminder.scheduled_time <= limit_date
             )
         )
         existing_result = await session.execute(existing_stmt)
@@ -49,7 +60,7 @@ class ReminderGenerator:
 
         reminders: list[Reminder] = []
 
-        # 3. Route to logic
+        # 4. Route to logic
         if medication.frequency_type in {
             FrequencyType.ONCE_DAILY, FrequencyType.TWICE_DAILY,
             FrequencyType.THREE_TIMES_DAILY, FrequencyType.FOUR_TIMES_DAILY,
@@ -65,7 +76,7 @@ class ReminderGenerator:
                         try:
                             scheduled_times.append(time.fromisoformat(t))
                         except ValueError:
-                            logger.warning(f"⚠️ Invalid time format in reminder_times: {t} for medication {medication.id}")
+                            logger.warning("⚠️ Invalid time format in reminder_times: %s for medication %s", t, medication.id)
                             continue
                     elif isinstance(t, time):
                         scheduled_times.append(t)
@@ -79,13 +90,25 @@ class ReminderGenerator:
                 scheduled_times = times_map.get(medication.frequency_type, [time(8, 0)])
 
             reminders = ReminderGenerator._generate_daily_reminders(
-                medication, now_utc, end_generation, scheduled_times, existing_reminders
+                medication, start_point, limit_date, scheduled_times, existing_reminders
             )
 
         elif medication.frequency_type == FrequencyType.EVERY_X_HOURS:
             reminders = ReminderGenerator._generate_interval_reminders(
-                medication, now_utc, end_generation, existing_reminders
+                medication, start_point, limit_date, existing_reminders
             )
+
+        # 5. Log summary
+        if reminders:
+            logger.info(
+                "✨ Generated %d reminders for %s (From %s to %s)",
+                len(reminders),
+                medication.name,
+                start_point.date(),
+                limit_date.date(),
+            )
+        else:
+            logger.debug("No new reminders to generate for %s", medication.name)
 
         return reminders
 
@@ -104,7 +127,7 @@ class ReminderGenerator:
         try:
             tz = ZoneInfo(medication.timezone)
         except Exception:
-            logger.warning(f"⚠️ Invalid timezone '{medication.timezone}' for medication {medication.id}, defaulting to UTC.")
+            logger.warning("⚠️ Invalid timezone '%s' for medication %s, defaulting to UTC.", medication.timezone, medication.id)
             tz = dt_timezone.utc
 
         current_date = start_utc.astimezone(tz).date()
@@ -208,6 +231,6 @@ class ReminderGenerator:
         # Commit once at the end (or periodically inside the loop if massive)
         if total_created > 0:
             await session.commit()
-            logger.info(f"✅ Created {total_created} new reminders.")
+            logger.info("✅ Created %d new reminders.", total_created)
 
         return total_created

@@ -88,6 +88,45 @@ class UserCreate(UserBase):
         return self
 
 
+class UserUpdate(BaseModel):
+    """Schema for updating user profile fields (all optional)."""
+    first_name: str | None = Field(None, min_length=1, max_length=50, description="First name")
+    last_name: str | None = Field(None, min_length=1, max_length=50, description="Last name")
+    email: EmailStr | None = Field(None, description="Email address")
+    mobile_number: str | None = Field(None, min_length=10, max_length=15, description="Mobile number")
+
+    # Reuse validation logic for optional fields
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            raise ValueError("Name fields cannot be empty")
+        if len(v) < 2:
+            raise ValueError("Name must be at least 2 characters")
+        return v.title()
+
+    @field_validator("mobile_number")
+    @classmethod
+    def validate_mobile(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        v = v.strip()
+
+        cleaned = re.sub(r'[\s\-\(\)]', '', v)
+        digits_only = cleaned[1:] if cleaned.startswith('+') else cleaned
+
+        if not digits_only.isdigit():
+            raise ValueError('Mobile number must contain only digits (and optional +)')
+
+        if len(digits_only) < 10 or len(digits_only) > 15:
+            raise ValueError('Mobile number must be between 10 and 15 digits')
+
+        return cleaned
+
+
 class UserResponseSchema(BaseModel):
     id: UUID
     email: EmailStr

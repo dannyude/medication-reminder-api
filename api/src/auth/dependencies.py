@@ -7,17 +7,19 @@ import jwt
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from api.src.auth.security import SECERET_KEY, ALGORITHM, oauth2_scheme
 from api.src.database import get_session
 
 from api.src.users.models import User, UserStatus
 
+security = HTTPBearer(auto_error=False)
 logger = logging.getLogger(__name__)
 
 
 async def get_current_user(
-    get_current_user_token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     session: AsyncSession = Depends(get_session)
 ) -> str:
 
@@ -41,7 +43,7 @@ async def get_current_user(
 
     try:
         # Decode token
-        payload = jwt.decode(get_current_user_token, SECERET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(credentials.credentials, SECERET_KEY, algorithms=[ALGORITHM])
 
         user_id: str = payload.get("sub")
         token_type: str = payload.get("type")

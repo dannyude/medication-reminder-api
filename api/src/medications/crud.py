@@ -5,8 +5,10 @@ from zoneinfo import ZoneInfo
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, desc
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from api.src.medications.models import Medication
 from api.src.logs.models import MedicationLog
@@ -17,6 +19,72 @@ from api.src.medications.utils import combine_datetime_with_timezone
 logger = logging.getLogger(__name__)
 
 """CRUD operations for Medications."""
+
+
+def _merge_start_datetime_fields(
+    medication: Medication,
+    update_data: dict
+) -> None:
+    """
+    Helper function to merge start_date, start_time, and timezone updates.
+    Modifies the medication object in place and removes consumed keys from update_data.
+    """
+    current_tz = medication.timezone
+    current_local = medication.start_datetime.astimezone(ZoneInfo(current_tz))
+    # Merge update data with existing local values
+    new_date = update_data.get("start_date", current_local.date())
+    new_time = update_data.get("start_time", current_local.time())
+    new_tz = update_data.get("timezone", current_tz)
+
+    medication.start_datetime = combine_datetime_with_timezone(new_date, new_time, new_tz)
+    medication.timezone = new_tz
+
+    # Remove consumed keys
+    for key in ["start_date", "start_time", "timezone"]:
+        update_data.pop(key, None)
+
+
+def _merge_end_datetime_fields(
+    medication: Medication,
+    update_data: dict
+) -> None:
+    """
+    Helper function to merge end_date and end_time updates.
+    Modifies the medication object in place and removes consumed keys from update_data.
+    """
+    tz_to_use = medication.timezone
+
+    # Case A: Updating the End DATE (and optionally time)
+    if "end_date" in update_data:
+        new_end_date = update_data["end_date"]
+
+        if new_end_date is None:
+            medication.end_datetime = None
+        else:
+            # Default to end-of-day OR preserve existing time
+            existing_time = time(23, 59, 59)
+            if medication.end_datetime:
+                existing_time = medication.end_datetime.astimezone(ZoneInfo(tz_to_use)).time()
+
+            new_end_time = update_data.get("end_time", existing_time)
+            medication.end_datetime = combine_datetime_with_timezone(
+                new_end_date, new_end_time, tz_to_use
+            )
+
+    # Case B: Updating ONLY the End TIME (must preserve existing date)
+    elif "end_time" in update_data and medication.end_datetime:
+        current_end_local = medication.end_datetime.astimezone(ZoneInfo(tz_to_use))
+        medication.end_datetime = combine_datetime_with_timezone(
+            current_end_local.date(),
+            update_data["end_time"],
+            tz_to_use
+        )
+
+    # Remove consumed keys
+    update_data.pop("end_date", None)
+    update_data.pop("end_time", None)
+
+
 async def create_medication(
     session: AsyncSession,
     user_id: UUID,
@@ -24,19 +92,34 @@ async def create_medication(
 ) -> Medication:
 
     # 1. Extract and map fields from Pydantic model
-    data = medication_in.model_dump(
-        exclude={
-            "start_date", "start_time",
-            "end_date", "end_time",
-            "start_datetime_utc", "end_datetime_utc"
-        }
-    )
+    try:
+        data = medication_in.model_dump(
+            exclude={
+                "start_date", "start_time",
+                "end_date", "end_time",
+                "start_datetime_utc", "end_datetime_utc"
+            }
+        )
 
-    # 2. Explicitly map to your Database Column Names
-    data["start_datetime"] = medication_in.start_datetime_utc
+        # 2. Explicitly map to your Database Column Names
+        # logic MUST be inside the try block to be caught by the except block below
+        data["start_datetime"] = medication_in.start_datetime_utc
 
-    if medication_in.end_datetime_utc:
-        data["end_datetime"] = medication_in.end_datetime_utc
+        if medication_in.end_datetime_utc:
+            data["end_datetime"] = medication_in.end_datetime_utc
+
+    except AttributeError as e:
+        logger.error("AttributeError during medication creation: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid data format: Missing required field: {str(e)}"
+        ) from e
+    except Exception as e:
+        logger.error("Unexpected error during medication creation: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred while processing the medication data."
+        ) from e
 
     # 3. Create the instance
     # This ensures NO extra keys like 'start_date' reach SQLAlchemy
@@ -51,17 +134,36 @@ async def create_medication(
         await session.commit()
         await session.refresh(medication)
 
+        logger.info("Created medication %s for user %s", medication.id, user_id)
+
         return medication
 
+    except IntegrityError as e:
+        # Catches DB constraints (e.g., if you have a unique constraint on medication names)
+        await session.rollback()
+        logger.warning("⚠️ Integrity Error (Duplicate?): %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A medication with this specific configuration might already exist."
+        ) from e
+
+    except SQLAlchemyError as e:
+        # Catches general database failures (connection lost, bad SQL types)
+        await session.rollback()
+        logger.error("🔥 Database Error: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while saving medication."
+        ) from e
 
     except Exception as e:
         await session.rollback()
-        logger.error(f"SQLAlchemy Error: {e}")
+        logger.error("SQLAlchemy Error: %s", e)
         # This will help you see EXACTLY which key is failing in your logs
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Mapping Error: {str(e)}"
-        )
+        ) from e
 
 # Read all medications for a user
 async def get_user_medications(
@@ -71,26 +173,45 @@ async def get_user_medications(
     page: int = 1,
     page_size: int = 50
 ) -> tuple[list[Medication], int]:
-    """Get all medications for a user."""
+    """Get all medications for a user with pagination and eager loading."""
 
-    query = select(Medication).where(Medication.user_id == user_id)
+    try:
+        # 1. Base Query
+        query = select(Medication).where(Medication.user_id == user_id)
 
-    if active_only:
-        query = query.where(Medication.is_active.is_(True))
+        if active_only:
+            query = query.where(Medication.is_active.is_(True))
 
-    # instead of func.count()
-    count_query = select(func.count(Medication.id)).select_from(query.subquery())
-    total_result = await session.execute(count_query)
-    total = total_result.scalar_one() or 0
+        # 2. Count Total (Robust method using subquery to respect filters)
+        # This prevents counting *all* meds if we only filtered for *active* ones
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await session.execute(count_query)
+        total = total_result.scalar() or 0
 
-    # Apply pagination
-    offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
+        # 3. Apply Pagination & Ordering
+        # ALWAYS order by created_at desc so new meds show first
+        offset = (page - 1) * page_size
+        query = (
+            query
+            .order_by(desc(Medication.created_at))
+            .offset(offset)
+            .limit(page_size)
+            # 🚀 PERFORMANCE BOOST: Load reminders automatically
+            # If your UI shows "Next reminder: 2pm", you NEED this line.
+            .options(selectinload(Medication.reminders))
+        )
 
-    result = await session.execute(query)
-    medications = result.scalars().all()
+        result = await session.execute(query)
+        medications = result.scalars().all()
 
-    return list(medications), total
+        return list(medications), total
+
+    except SQLAlchemyError as e:
+        logger.error("Database error while fetching medications: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database error occurred while fetching medications."
+        ) from e
 
 # Read a specific medication
 async def get_medication(
@@ -131,52 +252,11 @@ async def update_medication(
 
     # 1. Handle START Schedule Updates
     if any(k in update_data for k in ["start_date", "start_time", "timezone"]):
-        # Resolve current local time to preserve missing fields (date vs time)
-        current_tz = medication.timezone
-        current_local = medication.start_datetime.astimezone(ZoneInfo(current_tz))
-
-        # Merge update data with existing local values
-        new_date = update_data.get("start_date", current_local.date())
-        new_time = update_data.get("start_time", current_local.time())
-        new_tz = update_data.get("timezone", current_tz)
-
-        medication.start_datetime = combine_datetime_with_timezone(new_date, new_time, new_tz)
-        medication.timezone = new_tz
-
-        # Consume keys to prevent generic overwrite
-        for k in ["start_date", "start_time", "timezone"]:
-            update_data.pop(k, None)
+        _merge_start_datetime_fields(medication, update_data)
 
     # 2. Handle END Schedule Updates
     if any(k in update_data for k in ["end_date", "end_time"]):
-        tz_to_use = medication.timezone
-
-        # Case A: Updating the End DATE (and optionally time)
-        if "end_date" in update_data:
-            new_end_date = update_data["end_date"]
-
-            if new_end_date is None:
-                medication.end_datetime = None
-            else:
-                # Default to end-of-day OR preserve existing time
-                existing_time = time(23, 59, 59)
-                if medication.end_datetime:
-                    existing_time = medication.end_datetime.astimezone(ZoneInfo(tz_to_use)).time()
-
-                new_end_time = update_data.get("end_time", existing_time)
-                medication.end_datetime = combine_datetime_with_timezone(new_end_date, new_end_time, tz_to_use)
-
-        # Case B: Updating ONLY the End TIME (must preserve existing date)
-        elif "end_time" in update_data and medication.end_datetime:
-            current_end_local = medication.end_datetime.astimezone(ZoneInfo(tz_to_use))
-            medication.end_datetime = combine_datetime_with_timezone(
-                current_end_local.date(),
-                update_data["end_time"],
-                tz_to_use
-            )
-
-        update_data.pop("end_date", None)
-        update_data.pop("end_time", None)
+        _merge_end_datetime_fields(medication, update_data)
 
     # 3. Validation: Prevent Negative Schedules
     if medication.end_datetime is not None:
@@ -197,7 +277,7 @@ async def update_medication(
         await session.refresh(medication)
     except Exception as e:
         await session.rollback()
-        logger.exception(f"Update failed for medication {medication_id}")
+        logger.exception("Update failed for medication %s", medication_id)
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Update failed") from e
 
     return medication
@@ -252,7 +332,7 @@ async def update_medication_stock(
         await session.refresh(medication)
     except Exception as e:
         await session.rollback()
-        logger.exception(f"Failed to update stock for medication {medication_id}")
+        logger.exception("Failed to update stock for medication %s", medication_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update medication stock"
@@ -275,8 +355,8 @@ async def delete_medication(
     medication = await get_medication(session, medication_id, user_id)
 
     # Check for existing medication logs
-    smt = select(MedicationLog).where(MedicationLog.medication_id == medication_id)
-    result = await session.execute(smt)
+    stmt = select(MedicationLog).where(MedicationLog.medication_id == medication_id)
+    result = await session.execute(stmt)
     has_logs = result.scalars().first()
 
     try:
