@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     String,
     Text,
     DateTime,
@@ -31,9 +32,13 @@ class User(Base):
 
     email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
 
-    mobile_number: Mapped[str] = mapped_column(String, nullable=False)
+    mobile_number: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
+    hashed_password: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    google_id : Mapped[str | None] = mapped_column(String, unique=True, nullable=True, index=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="TRUE")
 
     status: Mapped[UserStatus] = mapped_column(
         SqlEnum(UserStatus, name="user_status", values_callable=lambda obj: [e.value for e in obj], native_enum=False, length=50),

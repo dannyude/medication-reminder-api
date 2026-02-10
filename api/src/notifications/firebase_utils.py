@@ -3,7 +3,7 @@ from firebase_admin import credentials
 import os
 import logging
 
-# Setup a logger so we can see what happens in the console
+
 logger = logging.getLogger(__name__)
 
 def initialize_firebase():

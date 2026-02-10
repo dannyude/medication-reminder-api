@@ -92,3 +92,16 @@ class ResetPasswordSchema(BaseModel):
             }
         }
     }
+
+# google login schema
+class GoogleLoginSchema(BaseModel):
+    id_token: str = Field(
+        description="Google OAuth ID token obtained from the client",
+        examples=["eyJhbGciOiJSUzI1NiIsImtpZCI6Ij..."]
+    )
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str
+

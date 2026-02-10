@@ -1,17 +1,15 @@
-from datetime import datetime, timezone
-import uuid
 import logging
+import uuid
+from datetime import datetime, timezone
+
 import jwt
-
-
 from fastapi import Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.src.auth.security import SECERET_KEY, ALGORITHM, oauth2_scheme
+from api.src.auth.security import ALGORITHM, SECRET_KEY
 from api.src.database import get_session
-
 from api.src.users.models import User, UserStatus
 
 security = HTTPBearer(auto_error=False)
@@ -21,7 +19,7 @@ logger = logging.getLogger(__name__)
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     session: AsyncSession = Depends(get_session)
-) -> str:
+) -> User:
 
     """
     Validate access token with comprehensive database checks.
@@ -41,9 +39,16 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         # Decode token
-        payload = jwt.decode(credentials.credentials, SECERET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
 
         user_id: str = payload.get("sub")
         token_type: str = payload.get("type")

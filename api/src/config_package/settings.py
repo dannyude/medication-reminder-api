@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
-
+from pydantic import SecretStr
 
 
 # 1. Get the path to this file (app/core/config.py)
@@ -23,13 +23,13 @@ class Settings(BaseSettings):
 
     # NEW EMAIL SETTINGS ADDED HERE
     MAIL_USERNAME: str
-    MAIL_PASSWORD: str
+    MAIL_PASSWORD: SecretStr
     MAIL_FROM: str
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = "smtp.gmail.com"
-    MAIL_FROM_NAME: str = "Medi Reminder"
-    MAIL_STARTTLS: bool = True
-    MAIL_SSL_TLS: bool = False
+    MAIL_PORT: int
+    MAIL_SERVER: str
+    MAIL_FROM_NAME: str
+    MAIL_STARTTLS: bool
+    MAIL_SSL_TLS: bool
     USE_CREDENTIALS: bool = True
     VALIDATE_CERTS: bool = True
 
@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     AT_USERNAME: str
     AT_SENDER_ID: str
     AT_ENV: str
+
+    # Google's OAuth Client ID
+    GOOGLE_CLIENT_ID: str
 
     # Config to specify the .env file location
     model_config = SettingsConfigDict(

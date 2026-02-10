@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.src.auth.dependencies import get_current_active_user
 from api.src.database import get_session
-from api.src.users.schemas import TokenSchema, UserCreate, ResponseMessage, UserUpdate, UserResponseSchema
+from api.src.users.schemas import FCMTokenRequest, UserCreate,ResponseMessage, UserUpdate, UserResponseSchema
 from api.src.users.crud import (
     register_user,
     get_user,
@@ -56,6 +56,24 @@ async def get_current_user_profile(
     return current_user
 
 
+@router.patch("/fcm-token", status_code=status.HTTP_200_OK)
+async def update_fcm_token(
+    token_data: FCMTokenRequest,
+    current_user: User = Depends(get_current_active_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Updates the Firebase Cloud Messaging (FCM) token for the current user.
+    """
+    print(f"🔥 Received Token for user {current_user.email}: {token_data.fcm_token[:10]}...") # Debug log
+
+    current_user.fcm_token = token_data.fcm_token
+    session.add(current_user)
+    await session.commit()
+
+    return {"message": "Device token updated successfully"}
+
+
 @router.get("/{user_id}", response_model=UserResponseSchema)
 async def get_user_by_id_route(
     user_id: UUID,
@@ -100,16 +118,3 @@ async def hard_delete_user_route(
 ):
     """Permanently delete a user."""
     await hard_delete_user(user_id, session)
-
-
-@router.post("/fcm-token")
-async def update_fcm_token(
-    token_data: TokenSchema,
-    current_user: User = Depends(get_current_active_user),
-    session: AsyncSession = Depends(get_session)
-):
-    """Save the user's device token for push notifications."""
-    current_user.fcm_token = token_data.fcm_token
-    session.add(current_user)
-    await session.commit()
-    return {"message": "FCM Token updated successfully"}

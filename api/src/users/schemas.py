@@ -145,5 +145,5 @@ class ResponseMessage(BaseModel):
     message: str
 
 
-class TokenSchema(BaseModel):
+class FCMTokenRequest(BaseModel):
     fcm_token: str = Field(..., description="Firebase Cloud Messaging token")

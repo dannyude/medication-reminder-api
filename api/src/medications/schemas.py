@@ -9,8 +9,6 @@ from api.src.medications.models import FrequencyType
 
 
 
-
-
 # SHARED VALIDATORS (DRY Principle)
 def normalize_time_list(v: list[time] | None) -> list[time] | None:
     """Strip timezone info from list of times."""
@@ -60,7 +58,7 @@ class MedicationBase(BaseModel):
         # 1. EVERY X HOURS (Needs Value, No List)
         if ft == FrequencyType.EVERY_X_HOURS:
             if not self.frequency_value:
-                raise ValueError("frequency_value (e.g. 4 hours) is required for 'Every X Hours'")
+                raise ValueError("frequency_value (e.g. 6 hours) is required for 'Every X Hours' frequency type")
             self.reminder_times = None # Times are calculated dynamically, not fixed
 
         # 2. CUSTOM (Needs List, No Value)
@@ -69,11 +67,13 @@ class MedicationBase(BaseModel):
                 raise ValueError("reminder_times list is required for 'Custom' frequency")
             self.frequency_value = None
 
-        # 3. PRESETS (Daily, Twice Daily)
+        # 3. PRESETS (Once, Twice, Three, Four Times Daily, As Needed)
         else:
-            self.frequency_value = None
-            # ⚠️ CHANGED: Do NOT wipe reminder_times here.
-            # If user selects "Daily" and picks "08:00", we want to save that "08:00".
+            # Presets should NOT have frequency_value set
+            if self.frequency_value is not None:
+                raise ValueError(f"frequency_value is only for 'every_x_hours'. Use reminder_times instead for '{ft.value}' frequency")
+            # ⚠️ Do NOT wipe reminder_times here.
+            # If user selects "three_times_daily" and provides custom times, keep them.
 
         return self
 
@@ -98,7 +98,7 @@ class MedicationCreate(MedicationBase):
         start = self.start_date
         end = self.end_date
 
-        # ⚠️ FIX: Compare strictly with today's date (no timedelta minutes logic on dates)
+        # FIX: Compare strictly with today's date (no timedelta minutes logic on dates)
         today = datetime.now(timezone.utc).date()
 
         if start < today:
@@ -160,8 +160,7 @@ class MedicationCreate(MedicationBase):
 
 
 
-# 🟡 UPDATE SCHEMA
-# =========================================================
+# UPDATE SCHEMA
 class MedicationUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     dosage: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -189,11 +188,37 @@ class MedicationUpdate(BaseModel):
     _validate_single_time = field_validator("start_time", "end_time")(normalize_single_time)
     _validate_tz = field_validator("timezone")(validate_tz_string)
 
+    @model_validator(mode='after')
+    def validate_frequency_logic_on_update(self):
+        """Validate frequency_value is only set when frequency_type is 'every_x_hours'."""
+        ft = self.frequency_type
+
+        # Only validate if frequency_type was provided in the update
+        if ft is None:
+            return self
+
+        # 1. EVERY X HOURS (Needs Value, No List)
+        if ft == FrequencyType.EVERY_X_HOURS:
+            if not self.frequency_value:
+                raise ValueError("frequency_value (e.g. 6 hours) is required for 'Every X Hours' frequency type")
+            self.reminder_times = None
+
+        # 2. CUSTOM (Needs List, No Value)
+        elif ft == FrequencyType.CUSTOM:
+            if not self.reminder_times:
+                raise ValueError("reminder_times list is required for 'Custom' frequency")
+            self.frequency_value = None
+
+        # 3. PRESETS (Once, Twice, Three, Four Times Daily, As Needed)
+        else:
+            if self.frequency_value is not None:
+                raise ValueError(f"frequency_value is only for 'every_x_hours'. Use reminder_times instead for '{ft.value}' frequency")
+
+        return self
 
 
-# =========================================================
-# 🔵 RESPONSE SCHEMA
-# =========================================================
+
+# RESPONSE SCHEMA
 class MedicationResponse(BaseModel):
     id: UUID
     user_id: UUID
@@ -246,6 +271,3 @@ class MedicationPaginationResponse(BaseModel):
     medications: list[MedicationResponse]
     page: int
     page_size: int
-
-
-

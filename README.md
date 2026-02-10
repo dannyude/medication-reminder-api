@@ -21,9 +21,9 @@
   <h3 align="center">MediReminder API</h3>
 
   <p align="center">
-    A production-ready, enterprise-grade REST API for medication adherence tracking with intelligent reminders, real-time notifications, and comprehensive health analytics.
+    A production-ready, enterprise-grade REST API for medication adherence tracking with intelligent reminders, multi-channel notifications, and comprehensive health analytics.
     <br />
-    <a href="https://github.com/dannyude/medication-reminder-api"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/dannyude/medication-reminder-api"><strong>Explore the documentation »</strong></a>
     <br />
     <br />
     <a href="#">View Demo</a>
@@ -49,9 +49,8 @@
     <li>
       <a href="#getting-started">Getting Started</a>
       <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-        <li><a href="#running-with-docker">Running with Docker</a></li>
+        <li><a href="#-quick-start-with-docker-recommended">🐳 Quick Start with Docker</a></li>
+        <li><a href="#-manual-installation-without-docker">🔧 Manual Installation</a></li>
       </ul>
     </li>
     <li><a href="#api-documentation">API Documentation</a></li>
@@ -64,6 +63,15 @@
     <li><a href="#contact">Contact</a></li>
   </ol>
 </details>
+
+---
+
+## 📚 Documentation
+
+- **[Quick Reference Guide](docs/QUICK_REFERENCE.md)** - Essential commands and workflows
+- **[Docker Quick Start](docs/DOCKER_QUICKSTART.md)** - Comprehensive Docker setup guide
+- **[Production Deployment](docs/DEPLOYMENT.md)** - Deploy to production environments
+- **[API Documentation](#api-documentation)** - Complete API endpoint reference
 
 ---
 
@@ -83,25 +91,27 @@
   </p>
 </div>
 
-**MediReminder API** is a **comprehensive, production-ready backend system** designed to solve medication adherence challenges through intelligent automation, real-time notifications, and data-driven insights.
+**MediReminder API** is a comprehensive, production-ready backend system designed to solve medication adherence challenges through intelligent automation, multi-channel notifications, and data-driven health insights.
 
-Built with **security-first principles** and **enterprise-grade architecture**, this API powers mobile and web applications that help patients maintain medication schedules, track adherence, and manage their health effectively.
+Built with security-first principles and enterprise-grade architecture, this API powers mobile and web applications that help patients maintain medication schedules, track adherence patterns, and manage their health effectively.
 
 ### Problem Statement
 
-**Medication non-adherence** is a global healthcare crisis:
+Medication non-adherence is a critical global healthcare challenge:
+
 - 🚨 **50%** of patients don't take medications as prescribed
 - 💰 **$100B+** in preventable healthcare costs annually (US alone)
-- 🏥 **125,000** deaths per year from poor medication adherence
-- 📱 Traditional reminder apps lack intelligence and fail to close the feedback loop
+- 🏥 **125,000+** preventable deaths per year from poor medication adherence
+- 📱 Traditional reminder apps lack intelligent scheduling and fail to provide actionable insights
 
-**MediReminder solves this by providing:**
-- ✅ **Intelligent, timezone-aware medication scheduling**
-- ✅ **Multi-channel notifications (SMS, Push)**
-- ✅ **Real-time inventory tracking with low-stock alerts**
-- ✅ **Adherence analytics and streak tracking**
-- ✅ **Secure, HIPAA-ready authentication**
-- ✅ **Background workers for reliable delivery**
+**MediReminder addresses these challenges by providing:**
+
+- ✅ **Intelligent, timezone-aware medication scheduling** with automatic reminder generation
+- ✅ **Multi-channel notifications** (Push, SMS) with smart fallback delivery
+- ✅ **Real-time inventory tracking** with proactive low-stock alerts
+- ✅ **Comprehensive adherence analytics** with streak tracking and reporting
+- ✅ **Enterprise-grade security** with OAuth2 and refresh token rotation
+- ✅ **Dedicated background scheduler** for reliable, scalable reminder delivery
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -118,27 +128,27 @@ Built with **security-first principles** and **enterprise-grade architecture**, 
 - **Token Reuse Detection** - automatic session revocation on security violations
 
 ### 💊 **Medication Management**
-- **CRUD operations** for medications
-- **Timezone-aware scheduling** (handles DST correctly)
-- **Multiple frequency types**: Once daily, twice daily, every X hours, as-needed
-- **Stock management** with automatic inventory tracking
-- **Low stock alerts** with actionable notifications
-- **Medication history** with comprehensive analytics
+- **Full CRUD operations** for medication records
+- **Timezone-aware scheduling** with automatic DST handling
+- **Flexible frequency types**: Once daily, twice daily, three times daily, four times daily, every X hours, custom schedules
+- **Automated stock management** with inventory deduction on each dose
+- **Proactive low-stock alerts** with configurable thresholds
+- **Comprehensive medication history** with adherence analytics
 
 ### ⏰ **Intelligent Reminder System**
-- **Background scheduler** (APScheduler) for reliable delivery
-- **Automatic reminder generation** (up to 30 days ahead)
-- **Smart missed detection** (auto-mark after 2 hours)
+- **Dedicated background scheduler** (APScheduler) running in isolated container
+- **Automatic reminder generation** for up to 30 days in advance
+- **Smart missed detection** with automatic status updates for overdue reminders
 - **Multi-status tracking**: Pending, Sent, Taken, Missed, Skipped
-- **Quick mark as taken** with single-tap confirmation
-- **Side effects logging** for health monitoring
+- **One-tap confirmation** for marking doses as taken
+- **Side effects logging** with notes for health monitoring and provider review
 
 ### 📲 **Multi-Channel Notifications**
-- **SMS via Termii** (optimized for Nigeria/Africa)
-- **Alternative SMS via Twilio** (global coverage)
-- **Push Notifications** via Firebase Cloud Messaging
-- **Smart delivery**: SMS first, push as fallback
-- **Low stock alerts** with urgency-based messaging
+- **Push Notifications** via Firebase Cloud Messaging (FCM)
+- **SMS delivery** via Africa's Talking (optimized for African markets)
+- **Smart delivery logic** with automatic fallback between channels
+- **Configurable notification preferences** per user
+- **Low-stock alerts** with urgency-based messaging and actionable CTAs
 
 ### 📊 **Health Analytics & Tracking**
 - **Streak tracking** (current and longest)
@@ -148,12 +158,12 @@ Built with **security-first principles** and **enterprise-grade architecture**, 
 - **Comprehensive reporting** for healthcare providers
 
 ### 🔄 **Background Processing**
-- **Automatic reminder checks** (every minute)
-- **Missed reminder marking** (hourly)
-- **Daily reminder generation** (3 AM)
-- **Low stock alerts** (daily at 9 AM)
-- **Weekly adherence reports** (configurable)
-- **Scalable to Celery** for production
+- **Automatic reminder dispatch** running every minute
+- **Stale reminder detection** with automatic MISSED status for reminders > 15 minutes overdue
+- **Nightly reminder generation** (configurable schedule)
+- **Isolated scheduler service** preventing interference with API workers
+- **Scalable architecture** ready for Celery/RQ integration for high-volume deployments
+- **Async task execution** for non-blocking notification delivery
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -183,15 +193,15 @@ graph TD
 ### Technology Stack
 
 #### **Backend Framework**
-- **FastAPI** - High-performance async API framework
-- **Python 3.11+** - Modern Python with type hints
-- **Pydantic V2** - Data validation and serialization
-- **SQLAlchemy 2.0** - Modern ORM with async support
+- **FastAPI** - High-performance async API framework with automatic OpenAPI documentation
+- **Python 3.10+** - Modern Python with type hints and async/await support
+- **Pydantic V2** - Runtime data validation and serialization
+- **SQLAlchemy 2.0** - Async ORM with relationship loading and query optimization
 
 #### **Database & Caching**
-- **PostgreSQL** - Primary database for ACID compliance
-- **Redis** - Session storage, rate limiting, caching
-- **Alembic** - Database migrations
+- **PostgreSQL 15** - ACID-compliant relational database with JSONB support
+- **Redis 7** - In-memory store for rate limiting and session management
+- **Alembic** - Database schema version control and migrations
 
 #### **Authentication & Security**
 - **OAuth2** with Password & Bearer flows
@@ -204,9 +214,9 @@ graph TD
 - **asyncio** - Asynchronous task execution
 
 #### **Notifications**
-- **Termii** - SMS service (Africa-optimized)
-- **Twilio** - Global SMS fallback
-- **Firebase Admin SDK** - Push notifications
+- **Africa's Talking** - SMS service (Africa-optimized, production)
+- **Firebase Admin SDK** - Push notifications via FCM
+- **HTTPX** - Async HTTP client for API integrations
 
 #### **Development & DevOps**
 - **Docker & Docker Compose** - Containerization
@@ -220,14 +230,72 @@ graph TD
 
 ## Getting Started
 
-### Prerequisites
+### 🐳 Quick Start with Docker (Recommended)
 
-- **Python 3.11+**
-- **PostgreSQL 14+**
+**The fastest way to get started!** Docker handles all dependencies automatically.
+
+#### Prerequisites
+- **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux)
+- **Docker Compose** (included with Docker Desktop)
+
+#### One-Command Setup
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/dannyude/medication-reminder-api.git
+cd medication-reminder-api
+.\setup.ps1
+```
+
+**Linux/Mac (Bash):**
+```bash
+git clone https://github.com/dannyude/medication-reminder-api.git
+cd medication-reminder-api
+chmod +x setup.sh
+./setup.sh
+```
+
+> **Note:** The setup script automatically generates a secure JWT secret, creates the `.env` file, builds Docker images, and starts all services including the dedicated scheduler container.
+
+The setup script will:
+- ✅ Validate Docker and Docker Compose installation
+- ✅ Create `.env` file with cryptographically secure JWT secret (256-bit)
+- ✅ Build optimized Docker images for all services
+- ✅ Start containerized services (PostgreSQL, Redis, API, Scheduler)
+- ✅ Wait for services to initialize and perform health checks
+- ✅ Display service endpoints and useful management commands
+
+**Access your API:**
+- 📍 **API Endpoint**: http://localhost:8000
+- 📚 **Interactive API Docs (Swagger)**: http://localhost:8000/docs
+- 🔧 **Alternative Docs (ReDoc)**: http://localhost:8000/redoc
+- ❤️ **Health Check**: http://localhost:8000/health
+
+**Useful Docker commands:**
+```bash
+docker-compose logs -f api              # View API logs
+docker-compose logs -f scheduler        # View scheduler logs
+docker-compose ps                       # Check service status
+docker-compose restart api              # Restart API service
+docker-compose down                     # Stop all services
+docker-compose up -d --build            # Rebuild and restart
+```
+
+📖 **For detailed Docker instructions, see [DOCKER_QUICKSTART.md](docs/DOCKER_QUICKSTART.md)**
+
+---
+
+### 🔧 Manual Installation (Without Docker)
+
+If you prefer running services locally without Docker:
+
+#### Prerequisites
+- **Python 3.10+** (3.11 recommended)
+- **PostgreSQL 14+** (15 recommended for JSONB performance)
 - **Redis 7+**
-- **Docker & Docker Compose** (optional)
+- **Git** for version control
 
-### Installation
+#### Installation Steps
 
 1. **Clone the repository**
    ```bash
@@ -266,12 +334,11 @@ graph TD
    ACCESS_TOKEN_EXPIRE_MINUTES=30
    REFRESH_TOKEN_EXPIRE_DAYS=30
 
-   # SMS Providers
-   TERMII_API_KEY=your-termii-api-key
-   TERMII_SENDER_ID=MediRemind
-   TWILIO_ACCOUNT_SID=your-twilio-sid
-   TWILIO_AUTH_TOKEN=your-twilio-token
-   TWILIO_PHONE_NUMBER=+1234567890
+   # SMS Provider (Africa's Talking)
+   AT_API_KEY=your-africastalking-api-key
+   AT_USERNAME=your-africastalking-username
+   AT_SENDER_ID=MediRemind
+   AT_ENV=sandbox  # Use 'production' for live SMS
 
    # Firebase (for push notifications)
    FIREBASE_CREDENTIALS_PATH=path/to/firebase-credentials.json
@@ -290,12 +357,18 @@ graph TD
 
 6. **Start the development server**
    ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 
-7. **Access the API**
-   - API Docs: http://localhost:8000/docs
-   - ReDoc: http://localhost:8000/redoc
+7. **(Optional) Start the background scheduler**
+   ```bash
+   # In a separate terminal
+   python -m api.scheduler
+   ```
+
+8. **Access the API**
+   - Interactive API Docs: http://localhost:8000/docs
+   - Alternative Docs: http://localhost:8000/redoc
    - Health Check: http://localhost:8000/health
 
 ### Running with Docker
@@ -450,15 +523,15 @@ curl -X POST "http://localhost:8000/api/v1/reminders/{reminder_id}/mark-taken" \
 
 ## Notification System
 
-### SMS Notifications (Termii)
+### SMS Notifications (Africa's Talking)
 ```python
 # Medication reminder
-"Hi {name}, it's time to take your {medication} ({dosage}).
-Tap here to confirm: {link}"
+"🏥 Medi Reminder: Time to take {medication} ({dosage}). "
+"Stay healthy!"
 
 # Low stock alert
-"⚠️ Your {medication} is running low ({count} left).
-Time to refill!"
+"⚠️ Your {medication} is running low ({count} left). "
+"Time to refill!"
 ```
 
 ### Push Notifications (Firebase)
@@ -475,23 +548,29 @@ Time to refill!"
 ```
 
 ### Notification Channels
-1. **SMS** - Primary channel for critical reminders
-2. **Push Notifications** - Secondary channel for in-app alerts
-3. **Email** - Weekly summaries and reports (optional)
+1. **Push Notifications (FCM)** - Primary channel for real-time in-app alerts
+2. **SMS (Africa's Talking)** - Fallback channel when push notifications fail
+3. **Email** - Weekly summaries and reports (planned feature)
 
 ### Smart Delivery Logic
 ```python
-async def send_reminder(reminder):
-    # Try SMS first
-    if user.phone_number and user.sms_enabled:
-        await send_sms(reminder)
+async def send_reminder_notification(reminder, session) -> bool:
+    """Send medication reminder with intelligent fallback."""
+    user = reminder.user
 
-    # Fallback to push notification
-    if user.fcm_token and user.push_enabled:
-        await send_push(reminder)
+    # Try push notification first
+    if user.fcm_token:
+        success = await send_push_notification(user.fcm_token, reminder)
+        if success:
+            return True
 
-    # Log delivery attempt
-    await log_notification(reminder, status="sent")
+    # Fallback to SMS if push fails
+    if user.mobile_number:
+        success = await send_sms(user.mobile_number, reminder)
+        if success:
+            return True
+
+    return False
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

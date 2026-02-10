@@ -3,11 +3,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
-
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
+from fastapi.responses import FileResponse
 
 # --- DB & AUTH IMPORTS ---
 from api.src.database import create_db_and_tables, get_session
@@ -19,79 +18,45 @@ from api.src.users import routes as UserRouters
 from api.src.auth import routes as AuthRouters
 from api.src.medications import routes as MedicationRouters
 from api.src.reminders import routes as ReminderRouters
-
-# --- TASKS (Combined Import) ---
-from api.src.reminders.tasks import (
-    run_daily_reminder_generation,
-    check_and_send_pending_reminders
-)
+from api.src.config_package import routes as ConfigRouters
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MediReminder")
-
-scheduler = AsyncIOScheduler()
 
 # The life span of the application
 @asynccontextmanager
 async def lifespan(_: FastAPI):
 
     # --- STARTUP ---
-    logger.info("🔥 SYSTEM STARTING UP...")
+    logger.info("🔥 API SYSTEM STARTING UP...")
 
     # 1. Database
     await create_db_and_tables()
     logger.info("✅ Database tables checked.")
 
-    # 2. Redis (CRITICAL FIX)
+    # 2. Redis
     try:
         await init_redis()
         logger.info("✅ Redis connection initialized.")
     except Exception as e:
         logger.warning(f"⚠️ Redis failed to start (Rate limiting may be disabled): {e}")
 
-    # 3. Firebase (MOVE THIS UP! ⬆️)
-    # We must turn on the notification system BEFORE we start the scheduler
+    # 3. Firebase
     try:
         initialize_firebase()
         logger.info("✅ Firebase initialized.")
     except Exception as e:
         logger.error(f"❌ Firebase initialization failed: {e}")
 
-    # 4. Scheduler (START THIS LAST! ⬇️)
-    logger.info("⏰ Adding Scheduler Jobs...")
-
-    # Job A: Nightly Refill (Runs at 3 AM)
-    scheduler.add_job(
-        run_daily_reminder_generation,
-        trigger=CronTrigger(hour=3, minute=0),
-        id="daily_reminder_generation",
-        replace_existing=True
-    )
-
-    # Job B: Notification Worker
-    scheduler.add_job(
-        check_and_send_pending_reminders,
-        trigger=CronTrigger(minute="*"), # Runs every minute
-        id="notification_worker",
-        replace_existing=True
-    )
-
-    scheduler.start()
-    logger.info("✅ Scheduler started.")
-
-    # Print jobs for debugging
-    jobs = scheduler.get_jobs()
-    for job in jobs:
-        logger.info(f"   -> Job Loaded: {job.id} (Next run: {job.next_run_time})")
+    # NOTE: Scheduler logic has been MOVED to api/scheduler.py!
+    # This container is now purely for handling API requests.
 
     yield
 
     # --- SHUTDOWN ---
-    scheduler.shutdown()
-    await close_redis() # <--- CRITICAL FIX: Close Redis cleanly
-    logger.info("💤 System shutting down.")
-
+    await close_redis() # Ensure Redis connection is closed properly
+    logger.info("💤 API System shutting down.")
 
 
 # 4. INITIALIZE APP
@@ -105,17 +70,26 @@ app = FastAPI(
 # Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000",
+        "*", # Useful for mobile app testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Routers
-app.include_router(UserRouters.router, tags=["Users"])
-app.include_router(AuthRouters.router, tags=["Authentication"])
-app.include_router(MedicationRouters.router, tags=["Medications"])
-app.include_router(ReminderRouters.router, tags=["Reminders"])
+app.include_router(UserRouters.router)
+app.include_router(AuthRouters.router)
+app.include_router(MedicationRouters.router)
+app.include_router(ReminderRouters.router)
+app.include_router(ConfigRouters.router)
+
+# Serve static files (for testing Google OAuth)
+app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
 
 @app.get("/health", tags=["Health"])
 async def health_check(session: AsyncSession = Depends(get_session)):
@@ -130,7 +104,7 @@ async def health_check(session: AsyncSession = Depends(get_session)):
         return {
             "status": "healthy",
             "database": "online",
-            "service": "Medi Reminder API"
+            "service": "Medi Reminder API (Workerless Mode)"
         }
     except Exception as e:
         # If DB is down, return 503 so load balancers stop sending traffic
@@ -139,33 +113,10 @@ async def health_check(session: AsyncSession = Depends(get_session)):
             detail="Database connection failed"
         ) from e
 
+@app.get("/firebase-messaging-sw.js", include_in_schema=False)
+async def service_worker():
+    # Make sure the path points to where your file actually is!
+    return FileResponse("frontend/firebase-messaging-sw.js")
 
-# Temporary router to test notifications system
-# from api.src.auth.dependencies import get_current_user
-# from api.src.users.models import User
-# from api.src.notifications.notification_service import NotificationService
-
-# @app.post("/test-notification", tags=["Test"])
-# async def trigger_test_notification(
-#     user: User = Depends(get_current_user)
-# ):
-#     """
-#     Forces a test notification to the logged-in user immediately.
-#     Bypasses the database and scheduler completely.
-#     """
-#     # 1. Check if user has a token
-#     if not user.fcm_token:
-#         return {"status": "error", "message": "You have no FCM Token!"}
-
-#     # 2. Send the push
-#     success = await NotificationService.send_push_notification(
-#         token=user.fcm_token,
-#         title="🧪 Test Notification",
-#         body="If you can read this, the system works!",
-#         data={"type": "test"}
-#     )
-
-#     if success:
-#         return {"status": "success", "message": "Notification sent!"}
-#     else:
-#         return {"status": "failed", "message": "Firebase rejected the request."}
+# 2. (Optional) If you serve other static files
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

@@ -29,6 +29,7 @@ dependencies = [
     "fastapi-limiter>=0.1.6",
     "fastapi-mail>=1.5.8",
     "firebase-admin>=7.1.0",
+    "google-auth>=2.48.0",
     "greenlet==3.2.4",
     "h11==0.16.0",
     "httpcore==1.0.9",

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Sign-In Test - MediReminder</title>
+    <script src="https://accounts.google.com/gsi/client" async defer onload="window.googleReady = true;"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./google-test.css?v=20260206">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo-icon">🔐</div>
+            <h1>MediReminder OAuth</h1>
+            <p>Google Sign-In Integration Test</p>
+        </header>
+
+        <main class="card">
+
+            <section class="steps-container">
+                <div class="step-item">
+                    <div class="step-badge">1</div>
+                    <div class="step-text">
+                        <h3>Check API Status</h3>
+                        <p>Ensure API is running on <code>localhost:8000</code></p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-badge">2</div>
+                    <div class="step-text">
+                        <h3>Authenticate</h3>
+                        <p>Click the Google button below to sign in.</p>
+                    </div>
+                </div>
+
+                <div class="step-item">
+                    <div class="step-badge">3</div>
+                    <div class="step-text">
+                        <h3>Inspect Tokens</h3>
+                        <p>View your Access and Refresh tokens below.</p>
+                    </div>
+                </div>
+            </section>
+
+            <div class="signin-area">
+                <div id="buttonDiv"></div>
+            </div>
+
+            <div id="result" class="result-area hidden">
+                <div id="resultContent"></div>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <p>💊 MediReminder API v1.0 • Dev Environment</p>
+        </footer>
+    </div>
+
+    <script>
+        let API_URL = "http://localhost:8000/auth/google";
+
+        function waitForGoogle() {
+            return new Promise((resolve) => {
+                if (window.googleReady || (window.google && window.google.accounts && window.google.accounts.id)) {
+                    resolve();
+                    return;
+                }
+                let attempts = 0;
+                const checkGoogle = setInterval(() => {
+                    attempts++;
+                    if (window.googleReady || (window.google && window.google.accounts && window.google.accounts.id)) {
+                        clearInterval(checkGoogle);
+                        resolve();
+                    } else if (attempts >= 150) {
+                        clearInterval(checkGoogle);
+                        console.warn('⚠️ Google library timeout');
+                        resolve();
+                    }
+                }, 100);
+            });
+        }
+
+        async function loadConfig() {
+            try {
+                await waitForGoogle();
+                const response = await fetch('http://localhost:8000/config/frontend');
+                const config = await response.json();
+
+                if (!config.google_client_id) throw new Error("Backend returned empty Client ID");
+
+                API_URL = config.api_url + '/auth/google';
+
+                google.accounts.id.initialize({
+                    client_id: config.google_client_id,
+                    callback: handleCredentialResponse
+                });
+
+                google.accounts.id.renderButton(
+                    document.getElementById("buttonDiv"),
+                    { theme: "outline", size: "large", type: "standard", shape: "pill", text: "continue_with", width: "300" }
+                );
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('buttonDiv').innerHTML = `<div class="error-banner">⚠️ ${error.message}</div>`;
+            }
+        }
+
+        async function handleCredentialResponse(response) {
+            const resultDiv = document.getElementById('result');
+            const resultContent = document.getElementById('resultContent');
+
+            // Remove hidden class
+            resultDiv.classList.remove('hidden');
+
+            resultContent.innerHTML = `
+                <div class="status-badge loading">
+                    <span class="dot"></span> Authenticating...
+                </div>
+            `;
+
+            try {
+                const apiResponse = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_token: response.credential })
+                });
+
+                const data = await apiResponse.json();
+
+                if (apiResponse.ok) {
+                    resultContent.innerHTML = `
+                        <div class="status-badge success">✅ Authentication Successful</div>
+
+                        <div class="token-group">
+                            <label>Access Token</label>
+                            <div class="code-block">${data.access_token}</div>
+                        </div>
+
+                        <div class="token-group">
+                            <label>Refresh Token</label>
+                            <div class="code-block">${data.refresh_token}</div>
+                        </div>
+
+                        <div class="meta-info">
+                            <span>Type: ${data.token_type}</span> • <span>Saved to LocalStorage</span>
+                        </div>
+                    `;
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('refresh_token', data.refresh_token);
+
+                    // ✨ AUTOMATICALLY SETUP PUSH NOTIFICATIONS AFTER LOGIN
+                    await setupPushNotifications(data.access_token);
+                } else {
+                    resultContent.innerHTML = `
+                        <div class="status-badge error">❌ Authentication Failed</div>
+                        <div class="error-details">
+                            <strong>Error:</strong> ${data.detail || 'Unknown error'}
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultContent.innerHTML = `
+                    <div class="status-badge error">❌ Network Error</div>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        // ====================================
+        // 🔔 PUSH NOTIFICATION SETUP
+        // ====================================
+        async function setupPushNotifications(accessToken) {
+            const resultContent = document.getElementById('resultContent');
+
+            try {
+                // Add notification status to UI
+                resultContent.innerHTML += `
+                    <div class="token-group" style="margin-top: 20px;">
+                        <label>🔔 Push Notifications</label>
+                        <div id="notificationStatus" class="status-badge loading">
+                            <span class="dot"></span> Setting up...
+                        </div>
+                    </div>
+                `;
+
+                const notificationStatus = document.getElementById('notificationStatus');
+
+                // 1. Request permission
+                const permission = await Notification.requestPermission();
+
+                if (permission !== 'granted') {
+                    notificationStatus.className = 'status-badge error';
+                    notificationStatus.textContent = '❌ Permission denied';
+                    return;
+                }
+
+                // 2. Initialize Firebase Messaging
+                const firebaseConfig = {
+                    apiKey: "AIzaSyC9BD1eVJkmzUL2fgwnBZNT9ufLDq_MiNI",
+                    authDomain: "medication-reminder-e87a4.firebaseapp.com",
+                    projectId: "medication-reminder-e87a4",
+                    storageBucket: "medication-reminder-e87a4.firebasestorage.app",
+                    messagingSenderId: "520153865045",
+                    appId: "1:520153865045:web:b23af841554f088c58addc",
+                    measurementId: "G-HDR04VFTWP"
+                };
+
+                firebase.initializeApp(firebaseConfig);
+                const messaging = firebase.messaging();
+
+                // 3. Get FCM Token
+                const token = await messaging.getToken({
+                    vapidKey: "BEBbHijT6Iggstvg0wYwZ0gmcNTGkdL_SyNYEUofRlldxE6KxsF4vUGtKoGVKh_2RxT8Qu4-_JP8bC_1Rc9-IIg"
+                });
+
+                if (!token) {
+                    throw new Error('Failed to generate FCM token');
+                }
+
+                // 4. Save token to backend
+                const response = await fetch('http://localhost:8000/user/fcm-token', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ fcm_token: token })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to save FCM token');
+                }
+
+                notificationStatus.className = 'status-badge success';
+                notificationStatus.textContent = '✅ Notifications enabled';
+
+                // 5. Listen for foreground messages
+                messaging.onMessage((payload) => {
+                    console.log('📩 Notification received:', payload);
+                    new Notification(payload.notification.title, {
+                        body: payload.notification.body,
+                        icon: '/favicon.ico'
+                    });
+                });
+
+            } catch (error) {
+                console.error('❌ Push notification setup failed:', error);
+                const notificationStatus = document.getElementById('notificationStatus');
+                if (notificationStatus) {
+                    notificationStatus.className = 'status-badge error';
+                    notificationStatus.textContent = `⚠️ ${error.message}`;
+                }
+            }
+        }
+
+        loadConfig();
+    </script>
+</body>
+</html>

@@ -12,7 +12,7 @@ from api.src.notifications.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
 
-# --- JOB 1: The Nightly Factory (Runs once a day) ---
+# --- JOB 1: Nightly Reminder Generation (Runs once a day) ---
 async def run_daily_reminder_generation():
     """
     Nightly task to refill reminders for the next 7 days.
@@ -21,31 +21,35 @@ async def run_daily_reminder_generation():
 
     async with async_session() as session:
         try:
+            # Generate reminders for all active medications. If this fails,
+            # the exception is logged below with full stack trace.
             total = await ReminderGenerator.generate_all_upcoming_reminders(
                 session=session,
                 days_ahead=7
             )
             logger.info("✅ Nightly Task Complete: Generated: %s reminders.", total)
         except Exception as e:
+            # Troubleshooting: Check DB connectivity, schema migrations, and
+            # medication configuration (timezone, start/end dates).
             logger.error("❌ Nightly Generation Failed: %s", str(e), exc_info=True)
 
 
-# --- JOB 2: The Reminder Dispatcher (Runs every minute) ---
+# --- JOB 2: Reminder Dispatcher (Runs every minute) ---
 async def check_and_send_pending_reminders():
     """
     1. Finds reminders that are DUE (scheduled_time <= now) and PENDING.
     2. Sends them using NotificationService.
     3. Marks them as SENT.
     """
-    # Define "Now" and the "Cutoff" (e.g., 15 mins ago)
+    # Define "Now" and a cutoff window to avoid sending very late reminders.
     now = datetime.now(timezone.utc)
     cutoff_time = now - timedelta(minutes=15)
 
     async with async_session() as session:
         try:
-            # 🧹 STEP 1: Mark Stale/Old Reminders as MISSED
-            # If the server was down, or the cron didn't run, we don't want to send a reminder
-            # that is 15 minutes late. Just mark it missed.
+            # STEP 1: Mark stale reminders as MISSED.
+            # Troubleshooting: If users report missing notifications, check
+            # whether reminders were marked MISSED due to being > 15 minutes late.
             stale_query = (
                 update(Reminder)
                 .where(
@@ -60,8 +64,8 @@ async def check_and_send_pending_reminders():
             # We commit immediately so the DB is clean for the next step
             await session.commit()
 
-            # Fetch Only Valid, Recent Reminders
-            # We use 'selectinload' to grab User & Med info efficiently in one go.
+            # STEP 2: Fetch only due reminders that are still PENDING.
+            # We use 'selectinload' to avoid N+1 queries and ensure relationships are loaded.
             query = (
                 select(Reminder)
                 .where(
@@ -85,11 +89,12 @@ async def check_and_send_pending_reminders():
 
             logger.info("🔔 Found %d due reminders. Processing...", len(due_reminders))
 
-            # Process & Send
+            # STEP 3: Process and send notifications for each due reminder.
+            # Troubleshooting: If duplicates occur, verify reminder uniqueness
+            # and ensure only one scheduler instance is running.
             for reminder in due_reminders:
                 try:
-                    # Trigger the Notification Service
-                    # (Handles Push -> SMS Fallback internally)
+                    # NotificationService handles Push -> SMS fallback logic.
                     success = await NotificationService.send_reminder_notification(reminder, session)
 
                     if success:
@@ -97,15 +102,18 @@ async def check_and_send_pending_reminders():
                         reminder.notification_sent_at = datetime.now(timezone.utc)
                         logger.info("✅ Reminder %d marked as SENT.", reminder.id)
                     else:
-                        # If both Push and SMS failed, we keep it PENDING to retry
-                        # OR you can mark it FAILED if you don't want retries.
+                        # If both Push and SMS failed, keep as PENDING to retry on next run.
+                        # Alternative: mark FAILED to stop retries for permanent errors.
                         logger.warning("⚠️ Failed to send reminder %d. Keeping as PENDING.", reminder.id)
                 except Exception as e:
+                    # Troubleshooting: Check NotificationService logs (push/SMS)
+                    # and verify user contact details in the database.
                     logger.error("❌ Error processing reminder %d: %s", reminder.id, str(e))
 
-            # Save All Changes
+            # Persist status updates (SENT/MISSED) for this batch.
             await session.commit()
 
         except Exception as e:
+            # Critical failure: rollback and log full traceback for diagnosis.
             logger.error("❌ Critical Error in Reminder Task: %s", str(e), exc_info=True)
             await session.rollback()

@@ -59,7 +59,7 @@ async def generate_and_save_reminders(
         )
     """
 
-    # 🧹 STEP 1: CLEANUP (Optional)
+    # Optional Cleanup: If clear_future=True, delete all PENDING reminders for this medication that are scheduled in the future.
 
     # If clear_future=True, remove all PENDING reminders scheduled for the future.
     # This is used when a user updates a medication's schedule (e.g., changes time from 8am to 6am).
@@ -79,7 +79,7 @@ async def generate_and_save_reminders(
         await session.execute(delete_stmt)
         logger.info("🧹 Cleared future reminders for %s before regenerating.", medication.name)
 
-    # 🌱 STEP 2: GENERATE NEW REMINDERS
+    # GENERATE NEW REMINDERS
 
     # Use ReminderGenerator to calculate all reminder times based on frequency.
     # This respects the medication's start/end dates and timezone.
@@ -93,7 +93,7 @@ async def generate_and_save_reminders(
             await session.commit()
         return []
 
-    # 🛡️ STEP 3: DUPLICATE CHECKING
+    # DUPLICATE CHECKING
 
     # Before saving, check for existing reminders in this time window.
     # This prevents creating duplicates if:
@@ -123,7 +123,7 @@ async def generate_and_save_reminders(
         if r.scheduled_time not in existing_timestamps
     ]
 
-    # STEP 4: SAVE TO DATABASE
+    # SAVE TO DATABASE
     # Add all new reminders to the session and commit in one transaction
     if new_reminders:
         session.add_all(new_reminders)

@@ -8,7 +8,7 @@ import firebase_admin
 from firebase_admin import credentials, messaging
 
 
-from api.src.config import settings
+from api.src.config_package import settings
 from api.src.reminders.models import Reminder
 
 

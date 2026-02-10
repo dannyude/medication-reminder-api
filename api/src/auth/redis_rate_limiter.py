@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 
 import redis.asyncio as redis
 
-from api.src.config import settings
+from api.src.config_package import settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,8 +29,8 @@ async def init_redis() -> None:
 
     # health check
     try:
-        await redis_client.ping()
-        logger.info("Connected to Redis for rate limiting.")
+        ping_result = await redis_client.ping()
+        logger.info("Connected to Redis for rate limiting. Ping: %s", ping_result)
     except Exception as e:
         logger.error("Failed to connect to Redis: %s", e)
         raise

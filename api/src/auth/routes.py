@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.src.database import get_session
 from api.src.auth.dependencies import get_current_active_user
 from api.src.auth.redis_rate_limiter import RedisRateLimiter
-from api.src.auth.schemas import ChangePasswordSchema, LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, UserResponseSchema
+from api.src.auth.schemas import ChangePasswordSchema, LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, UserResponseSchema, GoogleLoginSchema
 from api.src.auth.security import get_password_hash, verify_password
 from api.src.auth.tokens import (
     create_access_token,
@@ -20,10 +20,11 @@ from api.src.auth.tokens import (
     create_password_reset_token,
     verify_password_reset_token,
 )
-from api.src.config import settings
+from api.src.config_package import settings
 from api.src.users.models import User, UserStatus
 from api.src.auth.models import RefreshToken
-from api.src.services.email_service import EmailService
+from api.src.services.email import EmailService
+from api.src.auth.google_oauth import google_login
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 logger = logging.getLogger(__name__)
@@ -122,6 +123,24 @@ async def login(
             last_login_at=user.last_login_at
         )
     }
+
+
+@router.post("/google")
+async def google_oauth_login(
+    token_schema: GoogleLoginSchema,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Google OAuth login endpoint.
+
+    Accepts a Google ID token, verifies it, and either:
+    - Creates a new user if they don't exist
+    - Links Google account to existing email/password account
+    - Logs in existing Google user
+
+    Returns access and refresh tokens for the authenticated user.
+    """
+    return await google_login(token_schema, session)
 
 
 @router.post("/refresh")

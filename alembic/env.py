@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
 # 👇 IMPORT YOUR CONFIG & MODELS HERE
-from api.src.config import settings
+from api.src.config_package import settings
 from api.src.database import Base
 # 👇 CRITICAL: Import all your models here so Alembic can "see" them
 

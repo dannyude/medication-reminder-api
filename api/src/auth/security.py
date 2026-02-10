@@ -1,9 +1,9 @@
 from fastapi.security import OAuth2PasswordBearer
 from pwdlib import PasswordHash
 
-from ..config import settings
+from api.src.config_package import settings
 
-SECERET_KEY = settings.SECRET_KEY
+SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 

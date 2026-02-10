@@ -7,7 +7,7 @@ import jwt
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.src.auth.security import SECERET_KEY, ALGORITHM
+from api.src.auth.security import SECRET_KEY, ALGORITHM
 from api.src.auth.models import RefreshToken
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         ),
     })
 
-    return jwt.encode(to_encode, SECERET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # Create refresh token
 def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -45,7 +45,7 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> 
         ),
     }
 
-    return jwt.encode(to_encode, SECERET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def hash_token(raw_token: str) -> str:
@@ -61,7 +61,7 @@ async def store_refresh_token(
     session: AsyncSession,
 ) -> None:
     # Decode the token to get expiration and jti
-    payload = jwt.decode(refresh_token, SECERET_KEY, algorithms=[ALGORITHM])
+    payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
 
     if payload.get("type") != "refresh":
         raise HTTPException(
@@ -116,7 +116,7 @@ def create_password_reset_token(
     }
     return jwt.encode(
         payload,
-        SECERET_KEY,
+        SECRET_KEY,
         algorithm=ALGORITHM,
     )
 
@@ -128,7 +128,7 @@ def verify_password_reset_token(encoded_token: str) -> uuid.UUID:
         detail="Invalid or expired password reset token",
     )
     try:
-        payload = jwt.decode(encoded_token, SECERET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(encoded_token, SECRET_KEY, algorithms=[ALGORITHM])
 
         token_type: str | None = payload.get("type")
         user_id: str | None = payload.get("sub")

@@ -1,0 +1,157 @@
+version: '3.8'
+
+services:
+  # DATABASE SERVICE - PostgreSQL 15
+  db:
+    image: postgres:15-alpine
+    container_name: medieminder-db-prod
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: medication_db
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    networks:
+      - medieminder-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ==========================================
+  # CACHE SERVICE - Redis
+  redis:
+    image: redis:7-alpine
+    container_name: medieminder-redis-prod
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      # ✅ Host Port 6380 (Free) -> Container Port 6379 (Standard)
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - medieminder-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # ==========================================
+  # API SERVICE - FastAPI (The "Waiters")
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medieminder-api-prod
+    restart: always
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./alembic:/app/alembic
+      - ./serviceAccountKey.json:/app/serviceAccountKey.json:ro
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
+    command: >
+      sh -c "
+        echo '🚀 Starting API (Multi-Worker Mode)...' &&
+        uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4 --log-level info
+      "
+    networks:
+      - medieminder-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # ==========================================
+  # SCHEDULER SERVICE (The "Clock")
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medieminder-scheduler-prod
+    restart: always
+    # ✅ Runs the dedicated scheduler script
+    command: python -m api.scheduler
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+    networks:
+      - medieminder-network
+    volumes:
+      # Optional: Share logs if you want to see scheduler output in file
+      - ./logs:/app/logs
+
+    healthcheck:
+      disable: true
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+# ==========================================
+# NETWORKS & VOLUMES
+networks:
+  medieminder-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
