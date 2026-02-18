@@ -1,12 +1,13 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.src.auth.dependencies import get_current_active_user
 from api.src.database import get_session
 from api.src.users.schemas import FCMTokenRequest, UserCreate,ResponseMessage, UserUpdate, UserResponseSchema
+from api.src.services.email import EmailService
 from api.src.users.crud import (
     register_user,
     get_user,
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 )
 async def register(
     user: UserCreate,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -42,6 +44,22 @@ async def register(
     Returns the created user data (without password).
     """
     new_user = await register_user(user, session)
+
+    # try:
+    #     await EmailService.send_welcome_email(
+    #         email=new_user.email,
+    #         user_name=new_user.first_name or new_user.email.split('@')[0]
+    #     )
+    # except Exception as exc:
+    #     logger.error("Failed to send welcome email: %s", exc)
+
+    background_tasks.add_task(
+        EmailService.send_welcome_email,
+        email=new_user.email,
+        user_name=new_user.first_name or new_user.email.split('@')[0]
+    )
+
+
     return {
         "message": "User registered successfully",
         "user": new_user

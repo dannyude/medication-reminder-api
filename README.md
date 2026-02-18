@@ -54,6 +54,7 @@
       </ul>
     </li>
     <li><a href="#api-documentation">API Documentation</a></li>
+    <li><a href="#recent-improvements">Recent Improvements</a></li>
     <li><a href="#security-features">Security Features</a></li>
     <li><a href="#notification-system">Notification System</a></li>
     <li><a href="#deployment">Deployment</a></li>
@@ -71,7 +72,47 @@
 - **[Quick Reference Guide](docs/QUICK_REFERENCE.md)** - Essential commands and workflows
 - **[Docker Quick Start](docs/DOCKER_QUICKSTART.md)** - Comprehensive Docker setup guide
 - **[Production Deployment](docs/DEPLOYMENT.md)** - Deploy to production environments
+- **[GitHub Actions Setup](docs/GITHUB_ACTIONS_SETUP.md)** - CI/CD secrets and variables configuration
+- **[Secrets Management](docs/SECRETS_MANAGEMENT.md)** - Production-safe secret handling guide
+- **[Performance Benchmarking](docs/PERFORMANCE_BENCHMARKING.md)** - Load testing and performance gates
+- **[Hardening Summary](docs/HARDENING_SUMMARY.md)** - Security/performance hardening changelog
 - **[API Documentation](#api-documentation)** - Complete API endpoint reference
+
+---
+
+## Recent Improvements
+
+The project has recently been hardened for production readiness with concrete security, performance, and deployment upgrades:
+
+- 🔐 **Secret hygiene and environment safety**
+  - Restored `.env.prod` to placeholder-only template usage
+  - Strengthened `.gitignore` patterns for env file protection
+  - Added CI-oriented secret management guidance
+
+- 🛡️ **CORS and runtime security hardening**
+  - Moved CORS allowlist into environment-driven configuration (`CORS_ORIGINS`)
+  - Restricted CORS methods and headers explicitly for safer defaults
+
+- ⚙️ **Production runtime scaling improvements**
+  - Updated production startup to use dynamic Gunicorn worker calculation based on CPU
+  - Kept a production timeout strategy for long-running requests
+
+- 📊 **Load testing and release gates**
+  - Added Locust-based load profiles (baseline/spike + auth profile modes)
+  - Added PowerShell go/no-go gate script with p95/p99/failure thresholds
+  - Added documentation to run repeatable performance benchmarks
+
+- 🚀 **CI/CD workflow standardization**
+  - Added GitHub Actions deployment workflow under `.github/workflows/deploy.yml`
+  - Documented secret/variable separation and deployment setup steps
+
+- ✅ **Test and quality coverage expansion**
+  - Added comprehensive API test modules (`auth`, `authorization`, `config`, `logs`, `medications`, `reminders`, `users`)
+  - Added `pytest.ini` and aligned project dependencies for test and load tooling
+
+See the docs in the [Documentation](#-documentation) section for implementation details and runbooks.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 

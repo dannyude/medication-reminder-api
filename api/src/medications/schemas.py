@@ -37,7 +37,7 @@ def validate_tz_string(v: str | None) -> str | None:
 
 # medication schemas
 class MedicationBase(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=200, description="Medication name")
     dosage: str
     administration_route: str | None = None
     form: str | None = None
@@ -47,7 +47,7 @@ class MedicationBase(BaseModel):
     frequency_type: FrequencyType
     frequency_value: int | None = None
 
-    current_stock: int = 0
+    current_stock: int = Field(default=0, ge=0, description="Current stock (cannot be negative)")
     low_stock_threshold: int = 5
     is_active: bool = True
 
@@ -63,8 +63,8 @@ class MedicationBase(BaseModel):
 
         # 2. CUSTOM (Needs List, No Value)
         elif ft == FrequencyType.CUSTOM:
-            if not self.reminder_times:
-                raise ValueError("reminder_times list is required for 'Custom' frequency")
+            if not self.reminder_times or len(self.reminder_times) == 0:
+                raise ValueError("reminder_times list is required and cannot be empty for 'Custom' frequency")
             self.frequency_value = None
 
         # 3. PRESETS (Once, Twice, Three, Four Times Daily, As Needed)
@@ -72,6 +72,9 @@ class MedicationBase(BaseModel):
             # Presets should NOT have frequency_value set
             if self.frequency_value is not None:
                 raise ValueError(f"frequency_value is only for 'every_x_hours'. Use reminder_times instead for '{ft.value}' frequency")
+            # Check if reminder_times is explicitly set to empty list
+            if self.reminder_times is not None and len(self.reminder_times) == 0:
+                raise ValueError(f"reminder_times cannot be an empty list for '{ft.value}' frequency")
             # ⚠️ Do NOT wipe reminder_times here.
             # If user selects "three_times_daily" and provides custom times, keep them.
 
@@ -205,8 +208,8 @@ class MedicationUpdate(BaseModel):
 
         # 2. CUSTOM (Needs List, No Value)
         elif ft == FrequencyType.CUSTOM:
-            if not self.reminder_times:
-                raise ValueError("reminder_times list is required for 'Custom' frequency")
+            if not self.reminder_times or len(self.reminder_times) == 0:
+                raise ValueError("reminder_times list is required and cannot be empty for 'Custom' frequency")
             self.frequency_value = None
 
         # 3. PRESETS (Once, Twice, Three, Four Times Daily, As Needed)

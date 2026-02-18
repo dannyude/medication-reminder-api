@@ -27,15 +27,21 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-    // Extract notification data
-    const notificationTitle = payload.notification?.title || 'Medication Reminder';
+    // Normalize notification payload (prefer data payload for reliability)
+    const data = payload.data || {};
+    const notificationTitle = data.title || payload.notification?.title || 'Medication Reminder';
     const notificationOptions = {
-        body: payload.notification?.body || 'Time to take your medication',
-        icon: '/favicon.ico',  // You can replace with your app icon
-        badge: '/badge.png',    // Small icon shown in notification tray
-        tag: 'medication-reminder', // Groups notifications with same tag
+        body: data.body || payload.notification?.body || 'Time to take your medication',
+        icon: data.icon || '/favicon.ico',  // You can replace with your app icon
+        badge: data.badge || '/favicon.ico',    // Small icon shown in notification tray
+        tag: `med-reminder-${data.reminder_id}`, // Groups notifications with same tag
+        renotify: true, // Add this to ensure the phone vibrates again for the new one
         requireInteraction: true,   // Notification stays until user interacts
-        data: payload.data,         // Custom data you can access on click
+        data: {
+            ...data,
+            medication_id: data.medication_id,
+            reminder_id: data.reminder_id,
+        },
         vibrate: [200, 100, 200],   // Vibration pattern (mobile)
         actions: [
             {
@@ -53,41 +59,31 @@ messaging.onBackgroundMessage((payload) => {
     return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-// NOTIFICATION CLICK HANDLER
-// This fires when user clicks on the notification
-self.addEventListener('notificationclick', (event) => {
-    console.log('[firebase-messaging-sw.js] Notification click received:', event);
 
-    event.notification.close(); // Close the notification
+// NOTIFICATION CLICK HANDLER
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
 
     const action = event.action;
-    const reminderData = event.notification.data;
+    const data = event.notification.data;
+    const baseUrl = self.location.origin;
+    let targetUrl = `${baseUrl}/google-test.html`;
 
-    if (action === 'mark-taken') {
-        // Open app and mark medication as taken
-        event.waitUntil(
-            clients.openWindow(`/reminders/${reminderData.reminder_id}?action=taken`)
-        );
-    } else if (action === 'snooze') {
-        // Open app and snooze reminder
-        event.waitUntil(
-            clients.openWindow(`/reminders/${reminderData.reminder_id}?action=snooze`)
-        );
-    } else {
-        // Default: just open the app
-        event.waitUntil(
-            clients.openWindow('/')
-        );
+    if (action && data.reminder_id) {
+        targetUrl += `?id=${data.reminder_id}&action=${action}`;
     }
-});
 
-// SERVICE WORKER LIFECYCLE
-self.addEventListener('install', (event) => {
-    console.log('[firebase-messaging-sw.js] Service Worker installed');
-    self.skipWaiting(); // Activate immediately
-});
-
-self.addEventListener('activate', (event) => {
-    console.log('[firebase-messaging-sw.js] Service Worker activated');
-    event.waitUntil(clients.claim()); // Take control of all pages
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+            // 1. Check if app is already open
+            for (let client of windowClients) {
+                if (client.url.includes('google-test.html') && 'focus' in client) {
+                    // If open, focus it and navigate to the new URL
+                    return client.focus().then(c => c.navigate(targetUrl));
+                }
+            }
+            // 2. If not open, open a new window
+            return clients.openWindow(targetUrl);
+        })
+    );
 });

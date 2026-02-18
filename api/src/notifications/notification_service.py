@@ -57,11 +57,14 @@ class NotificationService:
         if user.fcm_token:
             sent_successfully = await NotificationService.send_push_notification(
                 token=user.fcm_token,
-                title="💊 Medication Reminder",
-                body=f"Time to take {medication.name}",
                 data={
                     "type": "medication_reminder",
-                    "reminder_id": str(reminder.id)
+                    "title": "💊 Medication Reminder",
+                    "body": f"Time to take {medication.name}",
+                    "medication_id": str(medication.id),
+                    "reminder_id": str(reminder.id),
+                    "icon": "/favicon.ico",
+                    "badge": "/favicon.ico",
                 }
             )
 
@@ -88,18 +91,16 @@ class NotificationService:
 
 
     @staticmethod
-    async def send_push_notification(token: str, title: str, body: str, data: dict) -> bool:
+    async def send_push_notification(token: str, data: dict) -> bool:
         """
         Sends Push Notification without blocking the main event loop.
         """
         try:
-            # Create the message payload
+            # Create a DATA-ONLY message so the Service Worker renders actions
+            # FCM requires all data values to be strings
+            data_payload = {str(k): str(v) for k, v in data.items()}
             message = messaging.Message(
-                notification=messaging.Notification(
-                    title=title,
-                    body=body,
-                ),
-                data=data,
+                data=data_payload,
                 token=token,
             )
 

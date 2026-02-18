@@ -1,22 +1,67 @@
 # .gitignore
+gitignore
 
-# --- Secrets ---
+# --- Secrets & Environment ---
 .env
-venv/
-venv_/
+.env.local
+.env.prod
+.env.staging
+.env.development
+!.env.example
+
 # --- Python Cache ---
 __pycache__
 *.pyc
+build/
+dist/
+*.egg-info/
 
-# --- rough sheet ---
-rough_sheet.py
+# --- Virtual Environments ---
+venv/
+venv_/
+ENV/
+env/
+.venv/
 
-.vscode
-Readme.md
-
-# --- Service Account Key ---
+# --- Service Account Keys & Credentials ---
 serviceAccountKey.json
+*.key
+*.pem
+secrets/
 
-# Ignore Postman configs and collections
+# --- IDE & Editor ---
+.vscode
+.idea/
+*.swp
+*.swo
+
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+locustfile.html
+stats_*.csv
+
+# --- Logs & Database ---
+logs/
+*.log
+backups/*.sql
+backups/*.dump
+
+# --- Postman ---
 .postman/
 postman/
+
+# --- Rough work ---
+rough_sheet.py
+Readme.md
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker-compose.prod.yml
+docker-compose.staging.yml
+docker-compose.development.yml
+docker-compose.yml

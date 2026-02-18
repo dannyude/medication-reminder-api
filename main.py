@@ -18,11 +18,21 @@ from api.src.users import routes as UserRouters
 from api.src.auth import routes as AuthRouters
 from api.src.medications import routes as MedicationRouters
 from api.src.reminders import routes as ReminderRouters
+from api.src.logs import routes as LogRouters
 from api.src.config_package import routes as ConfigRouters
+
+from api.src.config_package.settings import settings
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("MediReminder")
+
+# Parse CORS origins from settings
+cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
+if settings.ENVIRONMENT == "development":
+    cors_origins.extend(["*"])  # Allow all in development for mobile testing
+
+logger.info(f"CORS Origins: {cors_origins}")
 
 # The life span of the application
 @asynccontextmanager
@@ -70,15 +80,10 @@ app = FastAPI(
 # Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://localhost:3000",
-        "*", # Useful for mobile app testing
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],  # Be explicit, not "*"
+    allow_headers=["Content-Type", "Authorization"],  # Be explicit, not "*"
 )
 
 # Routers
@@ -86,6 +91,7 @@ app.include_router(UserRouters.router)
 app.include_router(AuthRouters.router)
 app.include_router(MedicationRouters.router)
 app.include_router(ReminderRouters.router)
+app.include_router(LogRouters.router)
 app.include_router(ConfigRouters.router)
 
 # Serve static files (for testing Google OAuth)

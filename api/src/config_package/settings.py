@@ -39,7 +39,12 @@ class Settings(BaseSettings):
     # Frontend URL
     FRONTEND_URL: str = "http://localhost:3000"
 
-    # Redis limiter settings
+    # CORS Configuration - Control via environment variable
+    # Comma-separated list: "http://localhost:3000,https://app.example.com"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
+
+    # Environment mode - production, staging, development
+    ENVIRONMENT: str = "development"
     MAX_ATTEMPTS_PER_EMAIL: int = 3
     MAX_ATTEMPTS_PER_IP: int = 10
     WINDOW_HOURS: int = 1

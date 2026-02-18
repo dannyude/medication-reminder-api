@@ -8,14 +8,11 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 
 from api.src.config_package import settings
 
-# TEMPLATE CONFIGURATION
-# Resolve the absolute path to the templates folder relative to this service file.
-# This ensures templates are found regardless of where the application is run from.
-TEMPLATE_FOLDER = Path(__file__).resolve().parent / "templates"
 # EMAIL CONNECTION SETUP
 # ==============================================================================
 # Initialize FastMail connection configuration with settings from environment.
 # Credentials are loaded from .env file via settings (Pydantic BaseSettings).
+# Note: Template rendering is handled by Jinja2 environment (see TEMPLATES_DIR below)
 conf = ConnectionConfig(
     # SMTP server username (email address or username).
     MAIL_USERNAME=settings.MAIL_USERNAME,
@@ -37,8 +34,6 @@ conf = ConnectionConfig(
     USE_CREDENTIALS=settings.USE_CREDENTIALS,
     # Validate SSL certificates (set False only for testing with self-signed certs).
     VALIDATE_CERTS=settings.VALIDATE_CERTS,
-    # Path to Jinja2 template folder for FastMail to load templates from.
-    TEMPLATE_FOLDER=TEMPLATE_FOLDER
 )
 
 # Create FastMail instance with the above configuration.
@@ -51,9 +46,9 @@ logger = logging.getLogger(__name__)
 # JINJA2 TEMPLATE ENVIRONMENT
 # Get absolute path to email templates directory.
 # Traverse up from this file: service.py -> email -> services -> src -> api.
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+CURRENT_DIR = Path(__file__).resolve().parent
 # Construct full path to email templates folder.
-TEMPLATES_DIR = BASE_DIR / "templates" / "email"
+TEMPLATES_DIR = CURRENT_DIR / "templates" / "email"
 
 # Initialize Jinja2 environment for rendering email templates.
 # FileSystemLoader: Load templates from TEMPLATES_DIR.
@@ -149,7 +144,7 @@ class EmailService:
             await fm.send_message(message)
             # Log successful email delivery for audit trail.
             logger.info("Password reset email sent to %s", email)
-            # Return success status.
+            # Return successa status.
             return True
         except Exception as exc:
             # Log error details including email address and exception message.

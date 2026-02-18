@@ -57,7 +57,7 @@ async def generate_medication_reminders(
 
 
 # LIST (Read History / Today / Upcoming)
-@router.get("/", response_model=ReminderListResponse)
+@router.get("", response_model=ReminderListResponse)
 async def list_reminders(
     status_filter: Optional[ReminderStatus] = Query(
         None,
