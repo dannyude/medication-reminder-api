@@ -43,7 +43,6 @@ locustfile.html
 stats_*.csv
 
 # --- Logs & Database ---
-logs/
 *.log
 backups/*.sql
 backups/*.dump

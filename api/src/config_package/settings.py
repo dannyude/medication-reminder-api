@@ -45,6 +45,8 @@ class Settings(BaseSettings):
 
     # Environment mode - production, staging, development
     ENVIRONMENT: str = "development"
+
+    # Rate Limiting
     MAX_ATTEMPTS_PER_EMAIL: int = 3
     MAX_ATTEMPTS_PER_IP: int = 10
     WINDOW_HOURS: int = 1
