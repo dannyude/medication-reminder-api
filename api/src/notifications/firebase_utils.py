@@ -1,39 +1,43 @@
 import firebase_admin
-from firebase_admin import credentials
+from firebase_admin import credentials, initialize_app
 import os
 import logging
-
 
 logger = logging.getLogger(__name__)
 
 def initialize_firebase():
     """
     Initializes the Firebase Admin SDK.
-    Should be called once when the FastAPI app starts.
     """
     try:
-        # Check if Firebase is already running (to prevent double-init errors)
+        #  Check if already initialized
         firebase_admin.get_app()
         logger.info("✅ Firebase is already initialized. Skipping.")
         return
-
     except ValueError:
-        # ValueError means "No app exists", so we are safe to initialize!
+        # ValueError means "No app exists", so we proceed to initialize!
         pass
 
-        # Path to service account key for Firebase
-        base_dir = os.getcwd()
-        key_path = os.path.join(base_dir, "serviceAccountKey.json")
+    try:
+        # Define the two possible paths
+        render_secret_path = "/etc/secrets/serviceAccountKey.json"
+        local_secret_path = "serviceAccountKey.json"
 
-        if not os.path.exists(key_path):
-            logger.error("❌ CRITICAL: Firebase key not found at: %s", key_path)
+        # Determine which file to use
+        if os.path.exists(render_secret_path):
+            logger.info(f"✅ Found Render secret at: {render_secret_path}")
+            cred = credentials.Certificate(render_secret_path)
+        elif os.path.exists(local_secret_path):
+            logger.info(f"⚠️ Using local key at: {local_secret_path}")
+            cred = credentials.Certificate(local_secret_path)
+        else:
+            # If neither exists, we cannot start
+            logger.error(f"❌ CRITICAL: No serviceAccountKey.json found! Checked: {render_secret_path} and {local_secret_path}")
             return
 
-        try:
-            # Load the credentials and start the app
-            cred = credentials.Certificate(key_path)
-            firebase_admin.initialize_app(cred)
-            logger.info("✅ Firebase initialized successfully!")
+        # 3. Initialize the app
+        initialize_app(cred)
+        logger.info("✅ Firebase initialized successfully!")
 
-        except Exception as e:
-            logger.error("❌ Failed to initialize Firebase: %s", str(e))
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize Firebase: {str(e)}")
