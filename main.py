@@ -20,6 +20,7 @@ from api.src.medications import routes as MedicationRouters
 from api.src.reminders import routes as ReminderRouters
 from api.src.logs import routes as LogRouters
 from api.src.config_package import routes as ConfigRouters
+from api import cron as CronRouter
 
 from api.src.config_package.settings import settings
 
@@ -59,9 +60,6 @@ async def lifespan(_: FastAPI):
     except Exception as e:
         logger.error("❌ Firebase initialization failed: %s", e)
 
-    # NOTE: Scheduler logic has been MOVED to api/scheduler.py!
-    # This container is now purely for handling API requests.
-
     yield
 
     # --- SHUTDOWN ---
@@ -74,6 +72,7 @@ app = FastAPI(
     title="Medi Reminder API",
     description="Async FastAPI backend for medication reminders.",
     version="1.0.0",  # "1.0.0" is often preferred over "v1" for semantic versioning
+    lifespan=lifespan,
 )
 
 # Middleware
@@ -92,6 +91,7 @@ app.include_router(MedicationRouters.router)
 app.include_router(ReminderRouters.router)
 app.include_router(LogRouters.router)
 app.include_router(ConfigRouters.router)
+app.include_router(CronRouter.router)
 
 # Serve static files (for testing Google OAuth)
 app.mount("/frontend", StaticFiles(directory="frontend"), name="frontend")
