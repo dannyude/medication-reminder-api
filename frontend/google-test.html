@@ -27,7 +27,7 @@
                     <div class="step-badge">1</div>
                     <div class="step-text">
                         <h3>Check API Status</h3>
-                        <p>Ensure API is running on <code>localhost:8000</code></p>
+                        <p>Ensure API is running on Production</p>
                     </div>
                 </div>
 
@@ -58,12 +58,14 @@
         </main>
 
         <footer class="app-footer">
-            <p>💊 MediReminder API v1.0 • Dev Environment</p>
+            <p>💊 MediReminder API v1.0 • Production Environment</p>
         </footer>
     </div>
 
     <script>
-        let API_URL = "http://localhost:8000/auth/google";
+        // Point to your LIVE Render Backend
+        const BACKEND_URL = "https://medication-reminder-api.onrender.com";
+        let API_URL = `${BACKEND_URL}/auth/google`;
 
         function waitForGoogle() {
             return new Promise((resolve) => {
@@ -89,12 +91,14 @@
         async function loadConfig() {
             try {
                 await waitForGoogle();
-                const response = await fetch('http://localhost:8000/config/frontend');
+
+                const response = await fetch(`${BACKEND_URL}/config/frontend`);
                 const config = await response.json();
 
                 if (!config.google_client_id) throw new Error("Backend returned empty Client ID");
 
-                API_URL = config.api_url + '/auth/google';
+                // Ensure the Google Auth endpoint also uses the backend URL
+                API_URL = `${BACKEND_URL}/auth/google`;
 
                 google.accounts.id.initialize({
                     client_id: config.google_client_id,
@@ -116,7 +120,6 @@
             const resultDiv = document.getElementById('result');
             const resultContent = document.getElementById('resultContent');
 
-            // Remove hidden class
             resultDiv.classList.remove('hidden');
 
             resultContent.innerHTML = `
@@ -176,7 +179,7 @@
 
         // ====================================
         // 🔔 PUSH NOTIFICATION SETUP
-        // ====================================
+
         async function setupPushNotifications(accessToken) {
             const resultContent = document.getElementById('resultContent');
 
@@ -226,7 +229,7 @@
                 }
 
                 // 4. Save token to backend
-                const response = await fetch('http://localhost:8000/user/fcm-token', {
+                const response = await fetch(`${BACKEND_URL}/users/fcm-token`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
