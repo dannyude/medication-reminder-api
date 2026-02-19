@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Sign-In Test - MediReminder</title>
+    <title>MediReminder OAuth</title>
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.googleReady = true;"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
@@ -17,42 +17,48 @@
         <header class="app-header">
             <div class="logo-icon">🔐</div>
             <h1>MediReminder OAuth</h1>
-            <p>Google Sign-In Integration Test</p>
+            <p>Secure Google account sign-in for your medication reminders.</p>
         </header>
 
         <main class="card">
+            <div class="trust-strip" aria-label="Security indicators">
+                <span>🔒 OAuth 2.0</span>
+                <span>✅ Google Identity</span>
+                <span>🛡️ Secure Tokens</span>
+            </div>
 
             <section class="steps-container">
                 <div class="step-item">
                     <div class="step-badge">1</div>
                     <div class="step-text">
-                        <h3>Check API Status</h3>
-                        <p>Ensure API is running on Production</p>
+                        <h3>Authenticate with Google</h3>
+                        <p>Sign in with your Google account to link your MediReminder profile.</p>
                     </div>
                 </div>
 
                 <div class="step-item">
                     <div class="step-badge">2</div>
                     <div class="step-text">
-                        <h3>Authenticate</h3>
-                        <p>Click the Google button below to sign in.</p>
-                                // ===== Runtime configuration & shared UI state =====
+                        <h3>Issue secure session tokens</h3>
+                        <p>Backend validates identity and returns access and refresh tokens.</p>
                     </div>
                 </div>
 
                 <div class="step-item">
                     <div class="step-badge">3</div>
-                                // Registers FCM service worker from site root.
-                                // Important: Firebase messaging requires a root-scoped worker for consistent push delivery.
                     <div class="step-text">
-                        <h3>Inspect Tokens</h3>
-                        <p>View your Access and Refresh tokens below.</p>
+                        <h3>Enable reminder actions</h3>
+                        <p>Activate push notifications and process quick actions from reminder links.</p>
                     </div>
                 </div>
             </section>
 
             <div class="signin-area">
-                <div id="buttonDiv"></div>
+                <div class="signin-content">
+                    <h2>Continue with Google</h2>
+                    <p>Sign in to connect your account and enable personalized reminders.</p>
+                    <div id="buttonDiv"></div>
+                </div>
             </div>
 
             <div id="result" class="result-area hidden">
@@ -60,21 +66,20 @@
             </div>
         </main>
 
-                                // Renders a user-facing error when Google Sign-In cannot initialize.
         <footer class="app-footer">
             <p>💊 MediReminder API v1.0 • Production Environment</p>
         </footer>
     </div>
 
     <script>
-                                // Waits for Google Identity Services script to be available before calling google.accounts APIs.
-                                // Prevents race conditions on slower networks/devices.
+        // ===== Runtime configuration & shared UI state =====
         const BACKEND_URL = 'https://medication-reminder-api.onrender.com';
         let API_URL = `${BACKEND_URL}/auth/google`;
-
         let currentAccessToken = localStorage.getItem('medi_token') || null;
         let pendingNotificationAction = null;
 
+        // Registers FCM service worker from site root.
+        // Firebase messaging requires root scope for reliable foreground/background delivery.
         async function registerRootServiceWorker() {
             const swPath = '/firebase-messaging-sw.js';
 
@@ -91,22 +96,21 @@
             return registration;
         }
 
-                                // Parses deep-link action from URL (used by notification click flows).
-                                // Example: ?id=<reminder_id>&action=mark-taken
+        // Renders a user-facing error when Google Sign-In fails to initialize.
         function showGoogleButtonError(message) {
             const buttonDiv = document.getElementById('buttonDiv');
             buttonDiv.innerHTML = '<div class="error-banner"><span id="googleButtonError"></span></div>';
             document.getElementById('googleButtonError').textContent = `⚠️ ${message}`;
         }
 
+        // Waits for Google Identity Services script readiness.
+        // Prevents timing issues before calling google.accounts.id APIs.
         function waitForGoogle() {
             return new Promise((resolve) => {
                 if (window.googleReady || (window.google && window.google.accounts && window.google.accounts.id)) {
                     resolve();
                     return;
                 }
-                                // Loads frontend config from backend and initializes Google Sign-In button.
-                                // Keeps client ID server-driven so environments can be switched without editing this page.
 
                 let attempts = 0;
                 const checkGoogle = setInterval(() => {
@@ -123,6 +127,8 @@
             });
         }
 
+        // Parses quick action from URL.
+        // Supported shape: ?id=<reminder_id>&action=mark-taken
         function getNotificationActionFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             const reminderId = urlParams.get('id');
@@ -135,6 +141,7 @@
             return null;
         }
 
+        // Loads OAuth config from backend and renders Google Sign-In button.
         async function loadConfig() {
             try {
                 await waitForGoogle();
@@ -142,11 +149,6 @@
                 const response = await fetch(`${BACKEND_URL}/config/frontend`);
                 if (!response.ok) {
                     throw new Error(`Failed to load frontend config (${response.status})`);
-                                // Handles Google credential callback:
-                                // 1) Exchanges ID token with backend
-                                // 2) Displays JWT tokens
-                                // 3) Executes pending reminder action (if any)
-                                // 4) Sets up push notifications
                 }
 
                 const config = await response.json();
@@ -175,6 +177,11 @@
             }
         }
 
+        // Handles Google credential callback:
+        // 1) Exchange Google ID token with backend
+        // 2) Show resulting app tokens
+        // 3) Process pending reminder action
+        // 4) Register push notifications
         async function handleCredentialResponse(response) {
             const resultDiv = document.getElementById('result');
             const resultContent = document.getElementById('resultContent');
@@ -210,12 +217,8 @@
 
                     document.getElementById('accessTokenDisplay').textContent = data.access_token || '';
                     document.getElementById('refreshTokenDisplay').textContent = data.refresh_token || '';
-                    currentAccessToken = data.access_token || null;
-                                // Configures browser notifications + Firebase Cloud Messaging and saves FCM token to backend.
-                                // Debug tip: if permission stays denied, reset site permission from browser lock/settings panel.
 
                     currentAccessToken = data.access_token || null;
-
                     if (currentAccessToken) {
                         localStorage.setItem('medi_token', currentAccessToken);
                     }
@@ -243,6 +246,7 @@
             }
         }
 
+        // Sets up browser notifications and registers FCM token with backend.
         async function setupPushNotifications(accessToken) {
             const resultContent = document.getElementById('resultContent');
 
@@ -328,8 +332,6 @@
                         Authorization: `Bearer ${accessToken}`
                     },
                     body: JSON.stringify({ fcm_token: token })
-                                // Executes reminder action that may arrive via deep link from push notification click.
-                                // Current supported action: mark-taken
                 });
 
                 if (!tokenResponse.ok) {
@@ -360,6 +362,7 @@
             }
         }
 
+        // Executes notification deep-link action after successful authentication.
         async function handleNotificationAction() {
             if (!pendingNotificationAction) {
                 return;
@@ -399,6 +402,8 @@
             }
         }
 
+        // ===== Startup sequence =====
+        // Read URL action, render Google Sign-In, and attempt action processing.
         pendingNotificationAction = getNotificationActionFromUrl();
         loadConfig();
         handleNotificationAction();

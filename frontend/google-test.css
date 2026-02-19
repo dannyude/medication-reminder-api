@@ -2,6 +2,7 @@
     /* Modern Palette */
     --primary: #4f46e5;
     --primary-light: #e0e7ff;
+    --primary-soft: #eef2ff;
     --bg-body: #f8fafc;
     --bg-card: #ffffff;
     --text-main: #1e293b;
@@ -23,7 +24,7 @@
 
 body {
     font-family: 'Inter', sans-serif;
-    background-color: var(--bg-body);
+    background: radial-gradient(circle at top, #eef2ff 0%, var(--bg-body) 45%);
     color: var(--text-main);
     min-height: 100vh;
     display: flex;
@@ -39,33 +40,53 @@ body {
 /* Header */
 .app-header {
     text-align: center;
-    margin-bottom: 30px;
+    margin-bottom: 22px;
 }
 
 .logo-icon {
     font-size: 3rem;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
 .app-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     font-weight: 700;
     color: var(--text-main);
-    margin-bottom: 5px;
+    margin-bottom: 6px;
 }
 
 .app-header p {
     color: var(--text-muted);
-    font-size: 0.95rem;
+    font-size: 0.92rem;
+    max-width: 460px;
+    margin: 0 auto;
 }
 
 /* Main Card */
 .card {
     background: var(--bg-card);
-    border-radius: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    padding: 32px;
+    border-radius: 18px;
+    box-shadow: 0 14px 30px -18px rgba(30, 41, 59, 0.35), 0 6px 14px -10px rgba(79, 70, 229, 0.25);
+    padding: 28px;
     border: 1px solid var(--border);
+}
+
+.trust-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 22px;
+}
+
+.trust-strip span {
+    background: var(--primary-soft);
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    padding: 6px 10px;
 }
 
 /* Steps Section */
@@ -80,13 +101,19 @@ body {
     display: flex;
     align-items: flex-start;
     gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed #e5e7eb;
+}
+
+.step-item:last-child {
+    border-bottom: none;
 }
 
 .step-badge {
-    background: var(--primary-light);
+    background: var(--primary-soft);
     color: var(--primary);
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     font-size: 0.8rem;
     font-weight: 700;
@@ -98,13 +125,13 @@ body {
 }
 
 .step-text h3 {
-    font-size: 0.95rem;
+    font-size: 0.93rem;
     font-weight: 600;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
 }
 
 .step-text p {
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     color: var(--text-muted);
     line-height: 1.4;
 }
@@ -121,12 +148,33 @@ code {
 .signin-area {
     display: flex;
     justify-content: center;
-    padding: 24px 0;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
+    padding: 20px;
+    border: 1px solid var(--border);
     margin-bottom: 24px;
-    background: #fdfdfd;
-    border-radius: 8px;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border-radius: 12px;
+}
+
+.signin-content {
+    text-align: center;
+    width: 100%;
+}
+
+.signin-content h2 {
+    font-size: 1rem;
+    margin-bottom: 4px;
+    color: #0f172a;
+}
+
+.signin-content p {
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+}
+
+#buttonDiv {
+    display: flex;
+    justify-content: center;
 }
 
 /* Results Area */
@@ -211,3 +259,106 @@ code {
 .code-block::-webkit-scrollbar { width: 6px; }
 .code-block::-webkit-scrollbar-track { background: transparent; }
 .code-block::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+
+@media (max-width: 480px) {
+    body {
+        padding: 24px 12px;
+    }
+
+    .app-header {
+        margin-bottom: 18px;
+    }
+
+    .app-header h1 {
+        font-size: 1.55rem;
+    }
+
+    .card {
+        padding: 22px;
+        border-radius: 16px;
+    }
+
+    .trust-strip {
+        gap: 6px;
+        margin-bottom: 18px;
+    }
+
+    .trust-strip span {
+        font-size: 0.72rem;
+        padding: 5px 9px;
+    }
+
+    .steps-container {
+        margin-bottom: 24px;
+    }
+
+    .signin-area {
+        padding: 16px;
+        margin-bottom: 18px;
+    }
+}
+
+@media (max-width: 380px) {
+    body {
+        padding: 16px 10px;
+    }
+
+    .logo-icon {
+        font-size: 2.5rem;
+    }
+
+    .app-header h1 {
+        font-size: 1.35rem;
+    }
+
+    .app-header p {
+        font-size: 0.84rem;
+    }
+
+    .card {
+        padding: 16px;
+        border-radius: 14px;
+    }
+
+    .step-item {
+        gap: 10px;
+        padding: 8px 0;
+    }
+
+    .step-badge {
+        width: 22px;
+        height: 22px;
+        font-size: 0.72rem;
+    }
+
+    .step-text h3 {
+        font-size: 0.86rem;
+    }
+
+    .step-text p {
+        font-size: 0.78rem;
+    }
+
+    .signin-content h2 {
+        font-size: 0.92rem;
+    }
+
+    .signin-content p {
+        font-size: 0.78rem;
+        margin-bottom: 12px;
+    }
+
+    #buttonDiv {
+        transform: scale(0.92);
+        transform-origin: center top;
+    }
+
+    .status-badge {
+        font-size: 0.78rem;
+        padding: 5px 10px;
+    }
+
+    .code-block {
+        font-size: 0.74rem;
+    }
+}
