@@ -99,12 +99,12 @@
         let accessToken = null;
         let fcmToken = null;
 
-        // API Base URL
-        const API_BASE = "http://localhost:8000";
+        // (Add /api/v1 to the end of this string if your backend requires it!)
+        const API_BASE = "https://medication-reminder-api.onrender.com";
 
         // ====================================
         // STEP 1: LOGIN
-        // ====================================
+
         window.handleLogin = async function() {
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
@@ -137,7 +137,6 @@
 
                 showStatus(statusDiv, '✅ Login successful!', 'success');
 
-                // Move to step 2
                 setTimeout(() => {
                     document.getElementById('step2').classList.remove('hidden');
                     document.getElementById('step2').scrollIntoView({ behavior: 'smooth' });
@@ -150,7 +149,7 @@
 
         // ====================================
         // STEP 2: REQUEST PERMISSION
-        // ====================================
+
         window.requestNotificationPermission = async function() {
             const statusDiv = document.getElementById('permissionStatus');
 
@@ -162,15 +161,14 @@
                 if (permission === 'granted') {
                     showStatus(statusDiv, '✅ Permission granted!', 'success');
 
-                    // Move to step 3
                     setTimeout(() => {
                         document.getElementById('step3').classList.remove('hidden');
                         document.getElementById('step3').scrollIntoView({ behavior: 'smooth' });
                     }, 1000);
                 } else if (permission === 'denied') {
-                    showStatus(statusDiv, '❌ Permission denied. Please enable notifications in your browser settings.', 'error');
+                    showStatus(statusDiv, '❌ Permission denied.', 'error');
                 } else {
-                    showStatus(statusDiv, '⚠️ Permission dismissed. Please try again.', 'error');
+                    showStatus(statusDiv, '⚠️ Permission dismissed.', 'error');
                 }
             } catch (error) {
                 showStatus(statusDiv, `❌ Error: ${error.message}`, 'error');
@@ -179,7 +177,7 @@
 
         // ====================================
         // STEP 3: GET FCM TOKEN
-        // ====================================
+
         window.getFCMToken = async function() {
             const statusDiv = document.getElementById('tokenStatus');
             const tokenDisplay = document.getElementById('tokenDisplay');
@@ -187,17 +185,23 @@
             try {
                 showStatus(statusDiv, 'Generating token...', 'info');
 
-                const token = await getToken(messaging, { vapidKey: VAPID_KEY });
+                console.log("Registering Service Worker...");
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                await navigator.serviceWorker.ready;
+                console.log("Service Worker is ready!");
+
+                const token = await getToken(messaging, {
+                    vapidKey: VAPID_KEY,
+                    serviceWorkerRegistration: registration // Pass it to Firebase!
+                });
 
                 if (token) {
                     fcmToken = token;
                     showStatus(statusDiv, '✅ Token generated successfully!', 'success');
 
-                    // Display the token
                     tokenDisplay.textContent = token;
                     tokenDisplay.classList.remove('hidden');
 
-                    // Move to step 4
                     setTimeout(() => {
                         document.getElementById('step4').classList.remove('hidden');
                         document.getElementById('step4').scrollIntoView({ behavior: 'smooth' });
@@ -213,24 +217,20 @@
 
         // ====================================
         // STEP 4: SAVE TO BACKEND
-        // ====================================
+
         window.saveTokenToBackend = async function() {
             const statusDiv = document.getElementById('saveStatus');
 
-            if (!accessToken) {
-                showStatus(statusDiv, '❌ Not logged in. Please complete Step 1.', 'error');
-                return;
-            }
-
-            if (!fcmToken) {
-                showStatus(statusDiv, '❌ No token available. Please complete Step 3.', 'error');
+            if (!accessToken || !fcmToken) {
+                showStatus(statusDiv, '❌ Missing token or login.', 'error');
                 return;
             }
 
             try {
                 showStatus(statusDiv, 'Saving token to server...', 'info');
 
-                const response = await fetch(`${API_BASE}/users/fcm-token`, {
+                // If you got a 405 error earlier, change 'users' to 'user' here!
+                const response = await fetch(`${API_BASE}/user/fcm-token`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
@@ -244,10 +244,8 @@
                     throw new Error(error.detail || 'Failed to save token');
                 }
 
-                const data = await response.json();
                 showStatus(statusDiv, '✅ Token saved successfully!', 'success');
 
-                // Move to step 5
                 setTimeout(() => {
                     document.getElementById('step5').classList.remove('hidden');
                     document.getElementById('step5').scrollIntoView({ behavior: 'smooth' });
@@ -260,11 +258,9 @@
 
         // ====================================
         // LISTEN FOR FOREGROUND MESSAGES
-        // ====================================
+
         onMessage(messaging, (payload) => {
             console.log('📩 Message received:', payload);
-
-            // Show browser notification
             if (payload.notification) {
                 new Notification(payload.notification.title, {
                     body: payload.notification.body,
@@ -274,17 +270,9 @@
             }
         });
 
-        // ====================================
-        // HELPER FUNCTION
-        // ====================================
         function showStatus(element, message, type) {
             element.innerHTML = `<div class="status ${type}">${message}</div>`;
         }
-
-        // Check if already logged in on page load
-        window.addEventListener('load', () => {
-            console.log('🔥 Firebase initialized and ready');
-        });
     </script>
 </body>
 </html>
