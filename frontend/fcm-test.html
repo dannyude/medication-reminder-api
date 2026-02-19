@@ -102,6 +102,22 @@
         // (Add /api/v1 to the end of this string if your backend requires it!)
         const API_BASE = "https://medication-reminder-api.onrender.com";
 
+        async function registerRootServiceWorker() {
+            const swPath = '/firebase-messaging-sw.js';
+
+            const swCheck = await fetch(swPath, { cache: 'no-store' });
+            if (!swCheck.ok) {
+                throw new Error('Service worker must be served from site root at /firebase-messaging-sw.js');
+            }
+
+            const registration = await navigator.serviceWorker.register(swPath, { scope: '/' });
+            if (!registration.scope.startsWith(`${window.location.origin}/`)) {
+                throw new Error(`Unexpected service worker scope: ${registration.scope}`);
+            }
+
+            return registration;
+        }
+
         // ====================================
         // STEP 1: LOGIN
 
@@ -128,7 +144,7 @@
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
+                    const error = await response.json().catch(() => ({}));
                     throw new Error(error.detail || 'Login failed');
                 }
 
@@ -155,6 +171,13 @@
 
             try {
                 showStatus(statusDiv, 'Requesting permission...', 'info');
+
+                if (!('Notification' in window)) {
+                    throw new Error('Notifications are not supported by this browser');
+                }
+                if (!('serviceWorker' in navigator)) {
+                    throw new Error('Service workers are not supported by this browser');
+                }
 
                 const permission = await Notification.requestPermission();
 
@@ -185,10 +208,10 @@
             try {
                 showStatus(statusDiv, 'Generating token...', 'info');
 
-                console.log("Registering Service Worker...");
-                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                console.log('Registering Service Worker...');
+                const registration = await registerRootServiceWorker();
                 await navigator.serviceWorker.ready;
-                console.log("Service Worker is ready!");
+                console.log('Service Worker is ready!');
 
                 const token = await getToken(messaging, {
                     vapidKey: VAPID_KEY,
@@ -240,7 +263,7 @@
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
+                    const error = await response.json().catch(() => ({}));
                     throw new Error(error.detail || 'Failed to save token');
                 }
 
@@ -263,7 +286,7 @@
             console.log('📩 Message received:', payload);
             if (payload.notification) {
                 new Notification(payload.notification.title, {
-                    body: payload.notification.body,
+                    body: payload.notification.body || '',
                     icon: '/favicon.ico',
                     badge: '/badge.png'
                 });
@@ -271,7 +294,11 @@
         });
 
         function showStatus(element, message, type) {
-            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+            element.textContent = '';
+            const status = document.createElement('div');
+            status.className = `status ${type}`;
+            status.textContent = message;
+            element.appendChild(status);
         }
     </script>
 </body>

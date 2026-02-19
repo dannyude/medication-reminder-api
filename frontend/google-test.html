@@ -63,9 +63,31 @@
     </div>
 
     <script>
-        // Point to your LIVE Render Backend
-        const BACKEND_URL = "https://medication-reminder-api.onrender.com";
+        const BACKEND_URL = 'https://medication-reminder-api.onrender.com';
         let API_URL = `${BACKEND_URL}/auth/google`;
+        let currentAccessToken = null;
+
+        async function registerRootServiceWorker() {
+            const swPath = '/firebase-messaging-sw.js';
+
+            const swCheck = await fetch(swPath, { cache: 'no-store' });
+            if (!swCheck.ok) {
+                throw new Error('Service worker must be served from site root at /firebase-messaging-sw.js');
+            }
+
+            const registration = await navigator.serviceWorker.register(swPath, { scope: '/' });
+            if (!registration.scope.startsWith(`${window.location.origin}/`)) {
+                throw new Error(`Unexpected service worker scope: ${registration.scope}`);
+            }
+
+            return registration;
+        }
+
+        function showGoogleButtonError(message) {
+            const buttonDiv = document.getElementById('buttonDiv');
+            buttonDiv.innerHTML = '<div class="error-banner"><span id="googleButtonError"></span></div>';
+            document.getElementById('googleButtonError').textContent = `⚠️ ${message}`;
+        }
 
         function waitForGoogle() {
             return new Promise((resolve) => {
@@ -73,9 +95,10 @@
                     resolve();
                     return;
                 }
+
                 let attempts = 0;
                 const checkGoogle = setInterval(() => {
-                    attempts++;
+                    attempts += 1;
                     if (window.googleReady || (window.google && window.google.accounts && window.google.accounts.id)) {
                         clearInterval(checkGoogle);
                         resolve();
@@ -93,11 +116,15 @@
                 await waitForGoogle();
 
                 const response = await fetch(`${BACKEND_URL}/config/frontend`);
+                if (!response.ok) {
+                    throw new Error(`Failed to load frontend config (${response.status})`);
+                }
+
                 const config = await response.json();
+                if (!config.google_client_id) {
+                    throw new Error('Backend returned empty Client ID');
+                }
 
-                if (!config.google_client_id) throw new Error("Backend returned empty Client ID");
-
-                // Ensure the Google Auth endpoint also uses the backend URL
                 API_URL = `${BACKEND_URL}/auth/google`;
 
                 google.accounts.id.initialize({
@@ -105,14 +132,17 @@
                     callback: handleCredentialResponse
                 });
 
-                google.accounts.id.renderButton(
-                    document.getElementById("buttonDiv"),
-                    { theme: "outline", size: "large", type: "standard", shape: "pill", text: "continue_with", width: "300" }
-                );
-
+                google.accounts.id.renderButton(document.getElementById('buttonDiv'), {
+                    theme: 'outline',
+                    size: 'large',
+                    type: 'standard',
+                    shape: 'pill',
+                    text: 'continue_with',
+                    width: '300'
+                });
             } catch (error) {
                 console.error(error);
-                document.getElementById('buttonDiv').innerHTML = `<div class="error-banner">⚠️ ${error.message}</div>`;
+                showGoogleButtonError(error.message);
             }
         }
 
@@ -121,7 +151,6 @@
             const resultContent = document.getElementById('resultContent');
 
             resultDiv.classList.remove('hidden');
-
             resultContent.innerHTML = `
                 <div class="status-badge loading">
                     <span class="dot"></span> Authenticating...
@@ -135,135 +164,155 @@
                     body: JSON.stringify({ id_token: response.credential })
                 });
 
-                const data = await apiResponse.json();
+                const data = await apiResponse.json().catch(() => ({}));
 
                 if (apiResponse.ok) {
                     resultContent.innerHTML = `
                         <div class="status-badge success">✅ Authentication Successful</div>
-
                         <div class="token-group">
                             <label>Access Token</label>
-                            <div class="code-block">${data.access_token}</div>
+                            <div id="accessTokenDisplay" class="code-block"></div>
                         </div>
-
                         <div class="token-group">
                             <label>Refresh Token</label>
-                            <div class="code-block">${data.refresh_token}</div>
-                        </div>
-
-                        <div class="meta-info">
-                            <span>Type: ${data.token_type}</span> • <span>Saved to LocalStorage</span>
+                            <div id="refreshTokenDisplay" class="code-block"></div>
                         </div>
                     `;
-                    localStorage.setItem('access_token', data.access_token);
-                    localStorage.setItem('refresh_token', data.refresh_token);
 
-                    // ✨ AUTOMATICALLY SETUP PUSH NOTIFICATIONS AFTER LOGIN
-                    await setupPushNotifications(data.access_token);
+                    document.getElementById('accessTokenDisplay').textContent = data.access_token || '';
+                    document.getElementById('refreshTokenDisplay').textContent = data.refresh_token || '';
+                    currentAccessToken = data.access_token || null;
+
+                    await setupPushNotifications(currentAccessToken);
                 } else {
                     resultContent.innerHTML = `
                         <div class="status-badge error">❌ Authentication Failed</div>
                         <div class="error-details">
-                            <strong>Error:</strong> ${data.detail || 'Unknown error'}
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                            <strong>Error:</strong> <span id="errorDetailDisplay"></span>
+                            <pre id="errorFullDisplay"></pre>
                         </div>
                     `;
+
+                    document.getElementById('errorDetailDisplay').textContent = data.detail || 'Unknown error';
+                    document.getElementById('errorFullDisplay').textContent = JSON.stringify(data, null, 2);
                 }
             } catch (error) {
                 resultContent.innerHTML = `
                     <div class="status-badge error">❌ Network Error</div>
-                    <p>${error.message}</p>
+                    <p id="networkErrorMessage"></p>
                 `;
+                document.getElementById('networkErrorMessage').textContent = error.message;
             }
         }
-
-        // ====================================
-        // 🔔 PUSH NOTIFICATION SETUP
 
         async function setupPushNotifications(accessToken) {
             const resultContent = document.getElementById('resultContent');
 
-            try {
-                // Add notification status to UI
-                resultContent.innerHTML += `
-                    <div class="token-group" style="margin-top: 20px;">
-                        <label>🔔 Push Notifications</label>
-                        <div id="notificationStatus" class="status-badge loading">
-                            <span class="dot"></span> Setting up...
-                        </div>
+            resultContent.innerHTML += `
+                <div class="token-group" style="margin-top: 20px;">
+                    <label>🔔 Push Notifications</label>
+                    <div id="notificationStatus" class="status-badge loading">
+                        <span class="dot"></span> Setting up...
                     </div>
-                `;
+                    <div id="permissionHint" style="display:none; font-size: 0.85rem; color: #666; margin-top: 5px;">
+                        💡 <i>It looks like notifications are blocked. Please click the lock icon in your browser address bar to reset permissions.</i>
+                    </div>
+                </div>
+            `;
 
-                const notificationStatus = document.getElementById('notificationStatus');
+            const notificationStatus = document.getElementById('notificationStatus');
+            const permissionHint = document.getElementById('permissionHint');
 
-                // 1. Request permission
+            try {
+                if (!accessToken) {
+                    throw new Error('Missing access token for push notification setup');
+                }
+                if (!('Notification' in window)) {
+                    throw new Error('Notifications are not supported by this browser');
+                }
+                if (!('serviceWorker' in navigator)) {
+                    throw new Error('Service workers are not supported by this browser');
+                }
+
                 const permission = await Notification.requestPermission();
-
                 if (permission !== 'granted') {
                     notificationStatus.className = 'status-badge error';
                     notificationStatus.textContent = '❌ Permission denied';
+                    if (permission === 'denied') {
+                        permissionHint.style.display = 'block';
+                    }
                     return;
                 }
 
-                // 2. Initialize Firebase Messaging
                 const firebaseConfig = {
-                    apiKey: "AIzaSyC9BD1eVJkmzUL2fgwnBZNT9ufLDq_MiNI",
-                    authDomain: "medication-reminder-e87a4.firebaseapp.com",
-                    projectId: "medication-reminder-e87a4",
-                    storageBucket: "medication-reminder-e87a4.firebasestorage.app",
-                    messagingSenderId: "520153865045",
-                    appId: "1:520153865045:web:b23af841554f088c58addc",
-                    measurementId: "G-HDR04VFTWP"
+                    apiKey: 'AIzaSyC9BD1eVJkmzUL2fgwnBZNT9ufLDq_MiNI',
+                    authDomain: 'medication-reminder-e87a4.firebaseapp.com',
+                    projectId: 'medication-reminder-e87a4',
+                    storageBucket: 'medication-reminder-e87a4.firebasestorage.app',
+                    messagingSenderId: '520153865045',
+                    appId: '1:520153865045:web:b23af841554f088c58addc',
+                    measurementId: 'G-HDR04VFTWP'
                 };
 
-                firebase.initializeApp(firebaseConfig);
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
                 const messaging = firebase.messaging();
 
                 console.log('🔔 Requesting service worker...');
-                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                const registration = await registerRootServiceWorker();
 
-                // Wait for the Service Worker to be fully active
                 await navigator.serviceWorker.ready;
-                console.log("Service Worker is ready!");
+                console.log('Service Worker is ready!');
 
-                // 3. Get FCM Token
+                let retryCount = 0;
+                while (!registration.active && retryCount < 10) {
+                    console.log('⏳ Waiting for active state...');
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+                    retryCount += 1;
+                }
+
+                console.log('✅ Service Worker is ACTIVE!');
+
                 const token = await messaging.getToken({
-                    vapidKey: "BEBbHijT6Iggstvg0wYwZ0gmcNTGkdL_SyNYEUofRlldxE6KxsF4vUGtKoGVKh_2RxT8Qu4-_JP8bC_1Rc9-IIg"
+                    vapidKey: 'BEBbHijT6Iggstvg0wYwZ0gmcNTGkdL_SyNYEUofRlldxE6KxsF4vUGtKoGVKh_2RxT8Qu4-_JP8bC_1Rc9-IIg',
+                    serviceWorkerRegistration: registration
                 });
 
                 if (!token) {
                     throw new Error('Failed to generate FCM token');
                 }
 
-                // 4. Save token to backend
-                const response = await fetch(`${BACKEND_URL}/user/fcm-token`, {
+                const tokenResponse = await fetch(`${BACKEND_URL}/user/fcm-token`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`
+                        Authorization: `Bearer ${accessToken}`
                     },
                     body: JSON.stringify({ fcm_token: token })
                 });
 
-                if (!response.ok) {
-                    throw new Error('Failed to save FCM token');
+                if (!tokenResponse.ok) {
+                    throw new Error(`Failed to save FCM token (${tokenResponse.status})`);
                 }
 
                 notificationStatus.className = 'status-badge success';
                 notificationStatus.textContent = '✅ Notifications enabled';
 
-                // 5. Listen for foreground messages
                 messaging.onMessage((payload) => {
+                    const notification = payload && payload.notification;
+                    if (!notification) {
+                        return;
+                    }
+
                     console.log('📩 Notification received:', payload);
-                    new Notification(payload.notification.title, {
-                        body: payload.notification.body,
+                    new Notification(notification.title || 'MediReminder', {
+                        body: notification.body || '',
                         icon: '/favicon.ico'
                     });
                 });
-
             } catch (error) {
                 console.error('❌ Push notification setup failed:', error);
-                const notificationStatus = document.getElementById('notificationStatus');
                 if (notificationStatus) {
                     notificationStatus.className = 'status-badge error';
                     notificationStatus.textContent = `⚠️ ${error.message}`;
@@ -271,7 +320,41 @@
             }
         }
 
+        async function handleNotificationAction() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const reminderId = urlParams.get('id');
+            const action = urlParams.get('action');
+
+            if (reminderId && action === 'mark-taken') {
+                console.log(`Processing ${action} for reminder: ${reminderId}`);
+
+                if (!currentAccessToken) {
+                    console.warn('⚠️ Action requested but no active session token found. Please login first.');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${BACKEND_URL}/reminders/${reminderId}/status`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${currentAccessToken}`
+                        },
+                        body: JSON.stringify({ status: 'taken' })
+                    });
+
+                    if (response.ok) {
+                        alert('✅ Medication marked as taken!');
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                } catch (error) {
+                    console.error('❌ Failed to update status:', error);
+                }
+            }
+        }
+
         loadConfig();
+        handleNotificationAction();
     </script>
 </body>
 </html>

@@ -1,11 +1,11 @@
 // Firebase Cloud Messaging Service Worker
 // This runs in the background and handles push notifications when the page is closed
 
-// Import Firebase scripts for Service Worker environment
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js');
+// 1. IMPORT NECESSARY SCRIPTS (CRITICAL FIX: Added Messaging)
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
-// Firebase Configuration (Same as your main app)
+// 2. FIREBASE CONFIGURATION
 const firebaseConfig = {
     apiKey: "AIzaSyC9BD1eVJkmzUL2fgwnBZNT9ufLDq_MiNI",
     authDomain: "medication-reminder-e87a4.firebaseapp.com",
@@ -16,34 +16,44 @@ const firebaseConfig = {
     measurementId: "G-HDR04VFTWP"
 };
 
-// Initialize Firebase in Service Worker
+// 3. INITIALIZATION
 firebase.initializeApp(firebaseConfig);
-
-// Get Messaging instance
 const messaging = firebase.messaging();
 
-// BACKGROUND MESSAGE HANDLER
-// This fires when a push notification arrives while the app is in the background
+// 4. INSTALL & ACTIVATE LISTENERS (CRITICAL FIX: Forces update)
+// Skip waiting ensures the new worker takes over as soon as it's registered
+self.addEventListener('install', () => self.skipWaiting());
+
+// Claim ensures that the worker starts controlling the page immediately
+self.addEventListener('activate', (event) => {
+    event.waitUntil(self.clients.claim());
+    console.log('[SW] Service Worker Activated and Claimed');
+});
+
+// 5. BACKGROUND MESSAGE HANDLER
 messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message:', payload);
 
-    // Normalize notification payload (prefer data payload for reliability)
     const data = payload.data || {};
+    const supportsActions = typeof Notification !== 'undefined' && Number.isInteger(Notification.maxActions) && Notification.maxActions > 0;
+    const supportsRequireInteraction = typeof Notification !== 'undefined'
+        && Notification.prototype
+        && 'requireInteraction' in Notification.prototype;
+
+    // Fallback logic for title/body
     const notificationTitle = data.title || payload.notification?.title || 'Medication Reminder';
     const notificationOptions = {
         body: data.body || payload.notification?.body || 'Time to take your medication',
-        icon: data.icon || '/favicon.ico',  // You can replace with your app icon
-        badge: data.badge || '/favicon.ico',    // Small icon shown in notification tray
-        tag: `med-reminder-${data.reminder_id}`, // Groups notifications with same tag
-        renotify: true, // Add this to ensure the phone vibrates again for the new one
-        requireInteraction: true,   // Notification stays until user interacts
+        icon: data.icon || '/favicon.ico',
+        badge: data.badge || '/favicon.ico',
+        tag: data.reminder_id ? `med-reminder-${data.reminder_id}` : 'general-reminder',
+        renotify: true,           // Vibrate again even if tag is the same
+        vibrate: [200, 100, 200], // Haptic feedback for importance
         data: {
             ...data,
-            medication_id: data.medication_id,
-            reminder_id: data.reminder_id,
+            url: '/google-test.html' // Default redirect
         },
-        vibrate: [200, 100, 200],   // Vibration pattern (mobile)
-        actions: [
+        actions: supportsActions ? [
             {
                 action: 'mark-taken',
                 title: '✅ Mark as Taken'
@@ -52,38 +62,45 @@ messaging.onBackgroundMessage((payload) => {
                 action: 'snooze',
                 title: '⏰ Snooze'
             }
-        ]
+        ].slice(0, Notification.maxActions) : []
     };
 
-    // Show the notification
+    if (supportsRequireInteraction) {
+        notificationOptions.requireInteraction = true;
+    }
+
     return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-
-// NOTIFICATION CLICK HANDLER
+// 6. NOTIFICATION CLICK HANDLER
 self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-
     const action = event.action;
-    const data = event.notification.data;
-    const baseUrl = self.location.origin;
-    let targetUrl = `${baseUrl}/google-test.html`;
+    const notification = event.notification;
+    const data = notification && notification.data && typeof notification.data === 'object' ? notification.data : {};
 
+    notification.close(); // Close the notification popup
+
+    const baseUrl = self.location.origin;
+    let targetUrl = `${baseUrl}${data.url || '/google-test.html'}`;
+
+    // If an action was clicked (e.g., mark-taken), append to URL
     if (action && data.reminder_id) {
         targetUrl += `?id=${data.reminder_id}&action=${action}`;
     }
 
     event.waitUntil(
-        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-            // 1. Check if app is already open
+        self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+            // Check if tab is already open
             for (let client of windowClients) {
                 if (client.url.includes('google-test.html') && 'focus' in client) {
-                    // If open, focus it and navigate to the new URL
+                    // Navigate existing tab and focus it
                     return client.focus().then(c => c.navigate(targetUrl));
                 }
             }
-            // 2. If not open, open a new window
-            return clients.openWindow(targetUrl);
+            // If not open, open a new window
+            if (self.clients.openWindow) {
+                return self.clients.openWindow(targetUrl);
+            }
         })
     );
 });
