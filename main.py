@@ -32,7 +32,7 @@ cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
 if settings.ENVIRONMENT == "development":
     cors_origins.extend(["*"])  # Allow all in development for mobile testing
 
-logger.info(f"CORS Origins: {cors_origins}")
+logger.info("CORS Origins: %s", cors_origins)
 
 # The life span of the application
 @asynccontextmanager
@@ -50,14 +50,14 @@ async def lifespan(_: FastAPI):
         await init_redis()
         logger.info("✅ Redis connection initialized.")
     except Exception as e:
-        logger.warning(f"⚠️ Redis failed to start (Rate limiting may be disabled): {e}")
+        logger.warning("⚠️ Redis failed to start (Rate limiting may be disabled): %s", e)
 
     # 3. Firebase
     try:
         initialize_firebase()
         logger.info("✅ Firebase initialized.")
     except Exception as e:
-        logger.error(f"❌ Firebase initialization failed: {e}")
+        logger.error("❌ Firebase initialization failed: %s", e)
 
     # NOTE: Scheduler logic has been MOVED to api/scheduler.py!
     # This container is now purely for handling API requests.
@@ -72,9 +72,8 @@ async def lifespan(_: FastAPI):
 # 4. INITIALIZE APP
 app = FastAPI(
     title="Medi Reminder API",
-    description="Async FastAPI backend for medication reminders",
-    version="1.0.0",
-    lifespan=lifespan
+    description="Async FastAPI backend for medication reminders.",
+    version="1.0.0",  # "1.0.0" is often preferred over "v1" for semantic versioning
 )
 
 # Middleware

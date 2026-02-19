@@ -1,7 +1,7 @@
-import firebase_admin
-from firebase_admin import credentials, initialize_app
 import os
 import logging
+import firebase_admin
+from firebase_admin import credentials, initialize_app
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +25,14 @@ def initialize_firebase():
 
         # Determine which file to use
         if os.path.exists(render_secret_path):
-            logger.info(f"✅ Found Render secret at: {render_secret_path}")
+            logger.info("✅ Found Render secret at: %s", render_secret_path)
             cred = credentials.Certificate(render_secret_path)
         elif os.path.exists(local_secret_path):
-            logger.info(f"⚠️ Using local key at: {local_secret_path}")
+            logger.info("⚠️ Using local key at: %s", local_secret_path)
             cred = credentials.Certificate(local_secret_path)
         else:
             # If neither exists, we cannot start
-            logger.error(f"❌ CRITICAL: No serviceAccountKey.json found! Checked: {render_secret_path} and {local_secret_path}")
+            logger.error("❌ CRITICAL: No serviceAccountKey.json found! Checked: %s and %s", render_secret_path, local_secret_path)
             return
 
         # 3. Initialize the app
@@ -40,4 +40,4 @@ def initialize_firebase():
         logger.info("✅ Firebase initialized successfully!")
 
     except Exception as e:
-        logger.error(f"❌ Failed to initialize Firebase: {str(e)}")
+        logger.error("❌ Failed to initialize Firebase: %s", str(e))
