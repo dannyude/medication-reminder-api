@@ -236,7 +236,7 @@
                 }
 
                 // 4. Save token to backend
-                const response = await fetch(`${BACKEND_URL}/users/fcm-token`, {
+                const response = await fetch(`${BACKEND_URL}/user/fcm-token`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
