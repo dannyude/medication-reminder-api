@@ -219,6 +219,13 @@
                 firebase.initializeApp(firebaseConfig);
                 const messaging = firebase.messaging();
 
+                console.log('🔔 Requesting service worker...');
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
+                // Wait for the Service Worker to be fully active
+                await navigator.serviceWorker.ready;
+                console.log("Service Worker is ready!");
+
                 // 3. Get FCM Token
                 const token = await messaging.getToken({
                     vapidKey: "BEBbHijT6Iggstvg0wYwZ0gmcNTGkdL_SyNYEUofRlldxE6KxsF4vUGtKoGVKh_2RxT8Qu4-_JP8bC_1Rc9-IIg"
