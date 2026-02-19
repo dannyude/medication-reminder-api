@@ -37,14 +37,13 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 15
 
     # Frontend URL
-    FRONTEND_URL: str = "http://localhost:3000"
+    FRONTEND_URL: str
 
     # CORS Configuration - Control via environment variable
-    # Comma-separated list: "http://localhost:3000,https://app.example.com"
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
+    CORS_ORIGINS: str
 
     # Environment mode - production, staging, development
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: str
 
     # Rate Limiting
     MAX_ATTEMPTS_PER_EMAIL: int = 3
@@ -52,7 +51,7 @@ class Settings(BaseSettings):
     WINDOW_HOURS: int = 1
     COOLDOWN_MINUTES: int = 15
 
-    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_URL: str
 
     # Africa's Talking configuration
     AT_API_KEY: str

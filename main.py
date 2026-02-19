@@ -30,7 +30,7 @@ logger = logging.getLogger("MediReminder")
 # Parse CORS origins from settings
 cors_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
 if settings.ENVIRONMENT == "development":
-    cors_origins.extend(["*"])  # Allow all in development for mobile testing
+    cors_origins.extend(["*"])
 
 logger.info("CORS Origins: %s", cors_origins)
 
